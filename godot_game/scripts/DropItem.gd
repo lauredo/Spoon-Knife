@@ -33,7 +33,7 @@ func _process(delta: float) -> void:
 	attract_timer -= delta
 
 	if is_instance_valid(magnetize_to) and attract_timer <= 0:
-		var dir := (magnetize_to.global_position - global_position)
+		var dir: Vector2 = (magnetize_to.global_position - global_position)
 		if dir.length() < 40.0:
 			pickup(magnetize_to)
 		else:
@@ -61,7 +61,7 @@ func _draw() -> void:
 	var bob_y := sin(bob_phase) * 3.0
 
 	# Shadow
-	draw_ellipse_arc(Vector2(0, 10), Vector2(8, 3), 0, TAU, Color(0, 0, 0, 0.25), 0, true)
+	_draw_ellipse(Vector2(0, 10), Vector2(8, 3), 0, TAU, Color(0, 0, 0, 0.25), 0, true)
 
 	# Item circle
 	draw_circle(Vector2(0, bob_y), 10, color)
@@ -75,7 +75,7 @@ func _draw() -> void:
 		var font := ThemeDB.fallback_font
 		draw_string(font, Vector2(8, bob_y + 4), str(amount), HORIZONTAL_ALIGNMENT_LEFT, -1, 10, Color(1, 1, 1, 0.9))
 
-func draw_ellipse_arc(center: Vector2, radius: Vector2, start_angle: float, end_angle: float, color: Color, width: float = 1.0, filled: bool = false) -> void:
+func _draw_ellipse(center: Vector2, radius: Vector2, start_angle: float, end_angle: float, color: Color, width: float = 1.0, filled: bool = false) -> void:
 	var points := PackedVector2Array()
 	var steps := 16
 	for i in steps + 1:
