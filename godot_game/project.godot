@@ -13,7 +13,7 @@ config_version=5
 config/name="Survival Craft - Don't Die"
 config/description="A Don't Starve-like survival game with crafting, mobs and combat."
 run/main_scene="res://scenes/Main.tscn"
-config/features=PackedStringArray("4.2", "Forward Plus")
+config/features=PackedStringArray("4.7", "Forward Plus")
 
 [autoload]
 
