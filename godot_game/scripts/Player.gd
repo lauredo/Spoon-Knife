@@ -82,37 +82,56 @@ func _ready() -> void:
 	_setup_sprite()
 
 func _setup_sprite() -> void:
+	# Isometric raccoon: SE/SW/NE provided; NW is NE mirrored. Attack only SE/SW.
 	var sf := Assets.sprite_frames("player", [
-		{"anim": "idle", "count": 1, "fps": 4.0, "loop": true},
-		{"anim": "walk", "count": 2, "fps": 9.0, "loop": true},
-		{"anim": "attack", "count": 1, "fps": 10.0, "loop": false},
+		{"anim": "idle_se", "count": 3, "fps": 4.0, "loop": true},
+		{"anim": "idle_sw", "count": 1, "fps": 4.0, "loop": true},
+		{"anim": "idle_ne", "count": 1, "fps": 4.0, "loop": true},
+		{"anim": "walk_se", "count": 6, "fps": 10.0, "loop": true},
+		{"anim": "walk_sw", "count": 6, "fps": 10.0, "loop": true},
+		{"anim": "walk_ne", "count": 6, "fps": 10.0, "loop": true},
+		{"anim": "attack_se", "count": 4, "fps": 18.0, "loop": false},
+		{"anim": "attack_sw", "count": 4, "fps": 18.0, "loop": false},
 	])
 	if sf == null:
 		return
 	sprite = AnimatedSprite2D.new()
 	sprite.sprite_frames = sf
-	sprite.animation = "idle"
+	sprite.animation = "idle_se"
 	sprite.show_behind_parent = true  # keep equipped item / attack arc on top
-	var tex := sf.get_frame_texture("idle", 0)
-	var s := 56.0 / float(tex.get_height())
+	sprite.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST  # crisp pixel art
+	var tex := sf.get_frame_texture("idle_se", 0)
+	var s := 60.0 / float(tex.get_height())
 	sprite.scale = Vector2(s, s)
+	sprite.position.y = 16.0 - tex.get_height() * s * 0.5  # bottom (feet) near the body base
 	add_child(sprite)
-	sprite.play("idle")
+	sprite.play("idle_se")
+
+# Maps the facing vector to one of the 4 isometric directions.
+func _iso_dir() -> String:
+	var right := facing.x >= 0.0
+	if facing.y >= 0.0:
+		return "se" if right else "sw"
+	return "ne" if right else "nw"
 
 func _update_sprite() -> void:
 	if sprite == null:
 		return
+	var dir := _iso_dir()
+	var flip := false
+	var anim := ""
 	if is_attacking:
-		if sprite.animation != "attack":
-			sprite.play("attack")
-	elif velocity.length() > 10.0:
-		if sprite.animation != "walk":
-			sprite.play("walk")
+		anim = "attack_se" if (dir == "se" or dir == "ne") else "attack_sw"
 	else:
-		if sprite.animation != "idle":
-			sprite.play("idle")
-	if absf(facing.x) > 0.1:
-		sprite.flip_h = facing.x < 0.0
+		var adir := dir
+		if dir == "nw":
+			adir = "ne"  # no NW art -> mirror NE
+			flip = true
+		var act := "walk_" if velocity.length() > 10.0 else "idle_"
+		anim = act + adir
+	if sprite.animation != anim:
+		sprite.play(anim)
+	sprite.flip_h = flip
 	if hit_flash > 0.5:
 		sprite.modulate = Color(1.8, 1.8, 1.8)
 	elif is_dodging:
