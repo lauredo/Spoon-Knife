@@ -106,9 +106,9 @@ func _draw() -> void:
 			draw_circle(Vector2(spark_x, spark_y), 1.5, Color(1.0, 0.8, 0.2, max(0.0, 1.0 - fmod(spark_phase, 2.0) * 0.5)))
 
 		# Fuel indicator
-		var fuel_pct := clamp(fuel_timer / 300.0, 0.0, 1.0)
+		var fuel_pct: float = clamp(fuel_timer / 300.0, 0.0, 1.0)
 		draw_rect(Rect2(-20, 28, 40, 4), Color(0.2, 0.1, 0.05))
-		draw_rect(Rect2(-20, 28, 40 * fuel_pct, 4), Color.lerp(Color.RED, Color(1.0, 0.65, 0.1), fuel_pct))
+		draw_rect(Rect2(-20, 28, 40 * fuel_pct, 4), Color.RED.lerp(Color(1.0, 0.65, 0.1), fuel_pct))
 	else:
 		# Embers / ash
 		draw_circle(Vector2(0, -2), 12, Color(0.3, 0.25, 0.22))

@@ -152,7 +152,7 @@ func _draw() -> void:
 		var pct := health / max_health
 		var bw := 30.0
 		draw_rect(Rect2(-bw * 0.5, -_get_draw_height() - 8, bw, 4), Color(0.2, 0.1, 0.05))
-		draw_rect(Rect2(-bw * 0.5, -_get_draw_height() - 8, bw * pct, 4), Color.lerp(Color.RED, Color.GREEN, pct))
+		draw_rect(Rect2(-bw * 0.5, -_get_draw_height() - 8, bw * pct, 4), Color.RED.lerp(Color.GREEN, pct))
 
 func _get_draw_height() -> float:
 	match resource_type:
