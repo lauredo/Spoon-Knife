@@ -7,6 +7,9 @@ var fuel_timer: float = 300.0  # 5 minutes of fuel
 var light_radius: float = 300.0
 var nearby_players: Array = []
 
+var base_sprite: Sprite2D = null
+var flame: AnimatedSprite2D = null
+
 signal fire_extinguished
 
 func _ready() -> void:
@@ -33,6 +36,30 @@ func _ready() -> void:
 	light_area.body_entered.connect(_on_player_entered_light)
 	light_area.body_exited.connect(_on_player_exited_light)
 
+	_setup_sprites()
+
+func _setup_sprites() -> void:
+	var base := Assets.sprite("structures", "campfire_base")
+	if base:
+		base_sprite = Sprite2D.new()
+		base_sprite.texture = base
+		base_sprite.show_behind_parent = true
+		var s := 60.0 / float(base.get_height())
+		base_sprite.scale = Vector2(s, s)
+		add_child(base_sprite)
+	var sf := Assets.sprite_frames("campfire", [{"anim": "burn", "count": 3, "fps": 10, "loop": true}])
+	if sf:
+		flame = AnimatedSprite2D.new()
+		flame.sprite_frames = sf
+		flame.animation = "burn"
+		var ft := sf.get_frame_texture("burn", 0)
+		var fs := 46.0 / float(ft.get_height())
+		flame.scale = Vector2(fs, fs)
+		# Anchor flame base just above the logs at the origin.
+		flame.position = Vector2(0, 2.0 - ft.get_height() * fs * 0.5)
+		add_child(flame)
+		flame.play("burn")
+
 func get_structure_type() -> String:
 	return "campfire"
 
@@ -42,6 +69,8 @@ func _process(delta: float) -> void:
 		fuel_timer -= delta
 		if fuel_timer <= 0.0:
 			_extinguish()
+	if flame:
+		flame.visible = is_lit
 	queue_redraw()
 
 func _on_player_entered_light(body: Node) -> void:
@@ -71,46 +100,42 @@ func _extinguish() -> void:
 	fire_extinguished.emit()
 
 func _draw() -> void:
-	# Stone ring
-	for i in 8:
-		var angle := float(i) / 8.0 * TAU
-		var stone_pos := Vector2(cos(angle) * 20, sin(angle) * 20)
-		draw_circle(stone_pos, 5, Color(0.5, 0.5, 0.5))
+	# Stone ring — procedural only when no base sprite (fallback)
+	if base_sprite == null:
+		for i in 8:
+			var angle := float(i) / 8.0 * TAU
+			var stone_pos := Vector2(cos(angle) * 20, sin(angle) * 20)
+			draw_circle(stone_pos, 5, Color(0.5, 0.5, 0.5))
 
 	if is_lit:
-		# Glowing ground
+		# Glowing ground (light overlay, kept in all cases)
 		draw_circle(Vector2.ZERO, 18, Color(0.9, 0.4, 0.05, 0.5))
 
-		# Logs
-		draw_line(Vector2(-12, 8), Vector2(12, -4), Color(0.45, 0.28, 0.12), 5.0)
-		draw_line(Vector2(-12, -4), Vector2(12, 8), Color(0.45, 0.28, 0.12), 5.0)
+		if base_sprite == null:
+			# Logs
+			draw_line(Vector2(-12, 8), Vector2(12, -4), Color(0.45, 0.28, 0.12), 5.0)
+			draw_line(Vector2(-12, -4), Vector2(12, 8), Color(0.45, 0.28, 0.12), 5.0)
 
-		# Fire flames (animated)
-		var flicker := sin(fire_phase) * 0.3 + 0.7
-		var flicker2 := sin(fire_phase * 1.3 + 1.0) * 0.25 + 0.75
+		if flame == null:
+			# Procedural fire + sparks (fallback when no animated flame)
+			var flicker := sin(fire_phase) * 0.3 + 0.7
+			var flicker2 := sin(fire_phase * 1.3 + 1.0) * 0.25 + 0.75
+			draw_circle(Vector2(0, -5), 18 * flicker, Color(0.95, 0.35, 0.05, 0.7))
+			draw_circle(Vector2(sin(fire_phase * 0.7) * 3.0, -12), 13 * flicker2, Color(1.0, 0.65, 0.1, 0.85))
+			draw_circle(Vector2(sin(fire_phase * 1.1) * 2.0, -18), 8 * flicker, Color(1.0, 0.9, 0.4, 0.9))
+			draw_circle(Vector2(0, -20), 4, Color(1.0, 1.0, 0.85))
+			for i in 3:
+				var spark_phase := fire_phase + float(i) * 2.1
+				var spark_x := sin(spark_phase * 0.8) * 10.0
+				var spark_y := -25.0 - fmod(spark_phase * 8.0, 20.0)
+				draw_circle(Vector2(spark_x, spark_y), 1.5, Color(1.0, 0.8, 0.2, max(0.0, 1.0 - fmod(spark_phase, 2.0) * 0.5)))
 
-		# Outer flame
-		draw_circle(Vector2(0, -5), 18 * flicker, Color(0.95, 0.35, 0.05, 0.7))
-		# Middle flame
-		draw_circle(Vector2(sin(fire_phase * 0.7) * 3.0, -12), 13 * flicker2, Color(1.0, 0.65, 0.1, 0.85))
-		# Inner flame
-		draw_circle(Vector2(sin(fire_phase * 1.1) * 2.0, -18), 8 * flicker, Color(1.0, 0.9, 0.4, 0.9))
-		# Core
-		draw_circle(Vector2(0, -20), 4, Color(1.0, 1.0, 0.85))
-
-		# Sparks
-		for i in 3:
-			var spark_phase := fire_phase + float(i) * 2.1
-			var spark_x := sin(spark_phase * 0.8) * 10.0
-			var spark_y := -25.0 - fmod(spark_phase * 8.0, 20.0)
-			draw_circle(Vector2(spark_x, spark_y), 1.5, Color(1.0, 0.8, 0.2, max(0.0, 1.0 - fmod(spark_phase, 2.0) * 0.5)))
-
-		# Fuel indicator
+		# Fuel indicator (always)
 		var fuel_pct: float = clamp(fuel_timer / 300.0, 0.0, 1.0)
 		draw_rect(Rect2(-20, 28, 40, 4), Color(0.2, 0.1, 0.05))
 		draw_rect(Rect2(-20, 28, 40 * fuel_pct, 4), Color.RED.lerp(Color(1.0, 0.65, 0.1), fuel_pct))
 	else:
-		# Embers / ash
+		# Embers / ash (overlay; logs/stones come from base sprite if present)
 		draw_circle(Vector2(0, -2), 12, Color(0.3, 0.25, 0.22))
 		for i in 4:
 			var angle := float(i) / 4.0 * TAU

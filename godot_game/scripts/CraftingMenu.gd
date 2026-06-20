@@ -126,11 +126,19 @@ func _add_recipe_row(recipe, near_structures: Array) -> void:
 	row.custom_minimum_size = Vector2(PANEL_W - 24, 44)
 	recipe_list.add_child(row)
 
-	# Item color swatch
-	var swatch := ColorRect.new()
-	swatch.color = result_data.color if result_data else Color(0.5, 0.5, 0.5)
-	swatch.custom_minimum_size = Vector2(36, 36)
-	row.add_child(swatch)
+	# Item icon (fallback to color swatch when no sprite exists)
+	var icon := Assets.item_icon(recipe.result_item)
+	if icon:
+		var tr := TextureRect.new()
+		tr.texture = icon
+		tr.custom_minimum_size = Vector2(36, 36)
+		tr.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+		row.add_child(tr)
+	else:
+		var swatch := ColorRect.new()
+		swatch.color = result_data.color if result_data else Color(0.5, 0.5, 0.5)
+		swatch.custom_minimum_size = Vector2(36, 36)
+		row.add_child(swatch)
 
 	# Item info
 	var info_col := VBoxContainer.new()

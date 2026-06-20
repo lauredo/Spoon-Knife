@@ -17,6 +17,7 @@ config/features=PackedStringArray("4.7", "Forward Plus")
 
 [autoload]
 
+Assets="*res://scripts/autoload/Assets.gd"
 ItemDatabase="*res://scripts/autoload/ItemDatabase.gd"
 CraftingSystem="*res://scripts/autoload/CraftingSystem.gd"
 GameManager="*res://scripts/autoload/GameManager.gd"

@@ -36,9 +36,9 @@ func _build_ui() -> void:
 	stats_panel.add_theme_stylebox_override("panel", panel_style)
 	add_child(stats_panel)
 
-	health_bar = _make_bar(stats_panel, "Health", Color(0.85, 0.15, 0.15), Color(0.2, 0.05, 0.05), 10, 10)
-	hunger_bar = _make_bar(stats_panel, "Hunger", Color(0.9, 0.65, 0.15), Color(0.2, 0.15, 0.0), 10, 45)
-	sanity_bar = _make_bar(stats_panel, "Sanity", Color(0.3, 0.5, 0.95), Color(0.05, 0.05, 0.2), 10, 80)
+	health_bar = _make_bar(stats_panel, "Health", "heart", Color(0.85, 0.15, 0.15), Color(0.2, 0.05, 0.05), 10, 10)
+	hunger_bar = _make_bar(stats_panel, "Hunger", "hunger", Color(0.9, 0.65, 0.15), Color(0.2, 0.15, 0.0), 10, 45)
+	sanity_bar = _make_bar(stats_panel, "Sanity", "sanity", Color(0.3, 0.5, 0.95), Color(0.05, 0.05, 0.2), 10, 80)
 
 	# ── Day/Time (top-center) ──────────────────────────────────
 	var time_panel := Panel.new()
@@ -116,13 +116,24 @@ func _build_ui() -> void:
 	hint_label.add_theme_color_override("font_color", Color(0.6, 0.6, 0.6, 0.8))
 	add_child(hint_label)
 
-func _make_bar(parent: Control, label_text: String, fill_color: Color, bg_color: Color, x: int, y: int) -> ProgressBar:
-	var lbl := Label.new()
-	lbl.text = label_text
-	lbl.position = Vector2(x, y)
-	lbl.add_theme_font_size_override("font_size", 11)
-	lbl.add_theme_color_override("font_color", Color(0.85, 0.85, 0.85))
-	parent.add_child(lbl)
+func _make_bar(parent: Control, label_text: String, icon_name: String, fill_color: Color, bg_color: Color, x: int, y: int) -> ProgressBar:
+	# Icon when available (SVG UI), otherwise fall back to a text label.
+	var icon := Assets.texture("res://assets/ui/%s.svg" % icon_name)
+	if icon:
+		var tr := TextureRect.new()
+		tr.texture = icon
+		tr.position = Vector2(x, y - 2)
+		tr.size = Vector2(22, 22)
+		tr.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+		tr.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+		parent.add_child(tr)
+	else:
+		var lbl := Label.new()
+		lbl.text = label_text
+		lbl.position = Vector2(x, y)
+		lbl.add_theme_font_size_override("font_size", 11)
+		lbl.add_theme_color_override("font_color", Color(0.85, 0.85, 0.85))
+		parent.add_child(lbl)
 
 	var bar := ProgressBar.new()
 	bar.position = Vector2(x + 55, y + 2)
@@ -215,7 +226,7 @@ func _update_slot(i: int) -> void:
 	for child in slot.get_children():
 		if child is Label and child.text.length() <= 1:
 			continue  # keep number label
-		if child is ColorRect or (child is Label and child.text.length() > 1):
+		if child is ColorRect or child is TextureRect or (child is Label and child.text.length() > 1):
 			child.queue_free()
 
 	var item_id: String = player.inventory.hotbar[i] if i < player.inventory.hotbar.size() else ""
@@ -231,12 +242,22 @@ func _update_slot(i: int) -> void:
 	if not item_data:
 		return
 
-	# Color swatch
-	var swatch := ColorRect.new()
-	swatch.color = item_data.color
-	swatch.size = Vector2(30, 30)
-	swatch.position = Vector2(9, 10)
-	slot.add_child(swatch)
+	# Item icon (fallback to color swatch when no sprite exists)
+	var icon := Assets.item_icon(item_id)
+	if icon:
+		var tr := TextureRect.new()
+		tr.texture = icon
+		tr.size = Vector2(36, 36)
+		tr.position = Vector2(6, 7)
+		tr.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+		tr.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+		slot.add_child(tr)
+	else:
+		var swatch := ColorRect.new()
+		swatch.color = item_data.color
+		swatch.size = Vector2(30, 30)
+		swatch.position = Vector2(9, 10)
+		slot.add_child(swatch)
 
 	# Count label
 	var count := player.inventory.get_count(item_id)

@@ -38,6 +38,12 @@ func set_night_mode(is_night: bool) -> void:
 		detection_range = 180.0
 		attack_damage = 10.0
 
+func _sprite_name() -> String:
+	return "spider"
+
+func _base_modulate() -> Color:
+	return Color(1.25, 1.0, 1.4) if night_bonus else Color.WHITE
+
 func _on_aggro(player: Node) -> void:
 	state = State.CHASE
 

@@ -17,6 +17,9 @@ var regrow_timer: float = 0.0
 var shake_amount: float = 0.0
 var bob_phase: float = 0.0
 
+var sprite: Sprite2D = null
+var _sprite_base_pos: Vector2 = Vector2.ZERO
+
 func _ready() -> void:
 	_setup_type()
 	collision_layer = 8
@@ -27,6 +30,39 @@ func _ready() -> void:
 	shape.radius = _get_collision_radius()
 	col.shape = shape
 	add_child(col)
+
+	_setup_sprite()
+
+func _setup_sprite() -> void:
+	var tex := Assets.sprite("resources", _type_name())
+	if tex == null:
+		return
+	sprite = Sprite2D.new()
+	sprite.texture = tex
+	sprite.show_behind_parent = true  # keep health bar / overlays drawn on top
+	var s := _sprite_target_height() / float(tex.get_height())
+	sprite.scale = Vector2(s, s)
+	var display_h := tex.get_height() * s
+	# Anchor the base slightly below origin, matching the procedural footprint.
+	_sprite_base_pos = Vector2(0, 8.0 - display_h * 0.5)
+	sprite.position = _sprite_base_pos
+	add_child(sprite)
+
+func _type_name() -> String:
+	match resource_type:
+		ResourceType.TREE: return "tree"
+		ResourceType.ROCK: return "rock"
+		ResourceType.BUSH: return "bush"
+		ResourceType.GRASS_TUFT: return "grass_tuft"
+	return "tree"
+
+func _sprite_target_height() -> float:
+	match resource_type:
+		ResourceType.TREE: return 120.0
+		ResourceType.ROCK: return 50.0
+		ResourceType.BUSH: return 54.0
+		ResourceType.GRASS_TUFT: return 36.0
+	return 60.0
 
 func _setup_type() -> void:
 	match resource_type:
@@ -76,6 +112,10 @@ func _get_collision_radius() -> float:
 func _process(delta: float) -> void:
 	shake_amount = max(0.0, shake_amount - delta * 4.0)
 	bob_phase += delta * 1.2
+	if sprite and not is_depleted:
+		sprite.position = _sprite_base_pos + Vector2(
+			randf_range(-shake_amount, shake_amount),
+			randf_range(-shake_amount * 0.5, shake_amount * 0.5) + sin(bob_phase) * 2.0)
 	if is_depleted:
 		regrow_timer -= delta
 		if regrow_timer <= 0.0:
@@ -121,31 +161,36 @@ func _harvest(player: Player) -> void:
 func _deplete() -> void:
 	is_depleted = true
 	regrow_timer = regrow_time
+	if sprite:
+		sprite.visible = false
 	depleted.emit(self)
 	queue_redraw()
 
 func _regrow() -> void:
 	is_depleted = false
 	health = max_health
+	if sprite:
+		sprite.visible = true
 	queue_redraw()
 
 func _draw() -> void:
-	var shake_offset := Vector2(randf_range(-shake_amount, shake_amount), randf_range(-shake_amount * 0.5, shake_amount * 0.5))
-	var bob := sin(bob_phase) * 2.0
-
 	if is_depleted:
 		_draw_depleted()
 		return
 
-	match resource_type:
-		ResourceType.TREE:
-			_draw_tree(shake_offset, bob)
-		ResourceType.ROCK:
-			_draw_rock(shake_offset)
-		ResourceType.BUSH:
-			_draw_bush(shake_offset, bob)
-		ResourceType.GRASS_TUFT:
-			_draw_grass(shake_offset, bob)
+	# Procedural body only when no sprite texture is present (fallback).
+	if sprite == null:
+		var shake_offset := Vector2(randf_range(-shake_amount, shake_amount), randf_range(-shake_amount * 0.5, shake_amount * 0.5))
+		var bob := sin(bob_phase) * 2.0
+		match resource_type:
+			ResourceType.TREE:
+				_draw_tree(shake_offset, bob)
+			ResourceType.ROCK:
+				_draw_rock(shake_offset)
+			ResourceType.BUSH:
+				_draw_bush(shake_offset, bob)
+			ResourceType.GRASS_TUFT:
+				_draw_grass(shake_offset, bob)
 
 	# Health bar when damaged
 	if health < max_health:

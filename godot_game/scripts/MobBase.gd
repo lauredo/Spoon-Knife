@@ -30,6 +30,8 @@ var hit_flash: float = 0.0
 var wander_timer: float = 0.0
 var is_dead: bool = false
 
+var sprite: AnimatedSprite2D = null
+
 func _ready() -> void:
 	health = max_health
 	collision_layer = 4
@@ -57,6 +59,45 @@ func _ready() -> void:
 	detect_area.body_exited.connect(_on_player_lost)
 
 	_set_wander_target()
+	_setup_sprite()
+
+# Subclasses override to name their sprite folder under assets/sprites/ (e.g. "boar").
+func _sprite_name() -> String:
+	return ""
+
+# Subclasses can override for a persistent tint (e.g. spider night mode).
+func _base_modulate() -> Color:
+	return Color.WHITE
+
+func _setup_sprite() -> void:
+	var nm := _sprite_name()
+	if nm == "":
+		return
+	var sf := Assets.sprite_frames(nm, [
+		{"anim": "idle", "count": 1, "fps": 4.0, "loop": true},
+		{"anim": "walk", "count": 2, "fps": 8.0, "loop": true},
+	])
+	if sf == null:
+		return
+	sprite = AnimatedSprite2D.new()
+	sprite.sprite_frames = sf
+	sprite.animation = "idle"
+	sprite.show_behind_parent = true  # keep health bar / state dot on top
+	var tex := sf.get_frame_texture("idle", 0)
+	var s := (body_radius * 3.0) / float(tex.get_height())
+	sprite.scale = Vector2(s, s)
+	add_child(sprite)
+	sprite.play("idle")
+
+func _update_sprite() -> void:
+	if sprite == null:
+		return
+	var anim := "walk" if velocity.length() > 5.0 else "idle"
+	if sprite.animation != anim:
+		sprite.play(anim)
+	if absf(velocity.x) > 1.0:
+		sprite.flip_h = velocity.x < 0.0
+	sprite.modulate = Color(1.8, 1.8, 1.8) if hit_flash > 0.3 else _base_modulate()
 
 func _physics_process(delta: float) -> void:
 	if is_dead:
@@ -64,6 +105,7 @@ func _physics_process(delta: float) -> void:
 	_update_timers(delta)
 	_update_state(delta)
 	_process_movement(delta)
+	_update_sprite()
 	queue_redraw()
 
 func _update_timers(delta: float) -> void:
@@ -189,6 +231,8 @@ func _die() -> void:
 	is_dead = true
 	state = State.DEAD
 	velocity = Vector2.ZERO
+	if sprite:
+		sprite.visible = false
 	_spawn_drops()
 	died.emit(self)
 	await get_tree().create_timer(0.3).timeout
@@ -203,11 +247,13 @@ func _spawn_drops() -> void:
 func _draw() -> void:
 	if is_dead:
 		return
-	var color := body_color
-	if hit_flash > 0.3:
-		color = Color.WHITE
 
-	_draw_mob(color)
+	# Procedural body only when there is no sprite (fallback).
+	if sprite == null:
+		var color := body_color
+		if hit_flash > 0.3:
+			color = Color.WHITE
+		_draw_mob(color)
 
 	# Health bar
 	var hp_pct := health / max_health

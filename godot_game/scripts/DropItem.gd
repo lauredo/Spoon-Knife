@@ -6,6 +6,7 @@ var amount: int = 1
 var bob_phase: float = 0.0
 var attract_timer: float = 0.0
 var magnetize_to: Node = null
+var icon_sprite: Sprite2D = null
 
 func _ready() -> void:
 	collision_layer = 16
@@ -27,10 +28,24 @@ func _ready() -> void:
 func setup(_item_id: String, _amount: int = 1) -> void:
 	item_id = _item_id
 	amount = _amount
+	_setup_icon()
+
+func _setup_icon() -> void:
+	var icon := Assets.item_icon(item_id)
+	if icon == null:
+		return
+	icon_sprite = Sprite2D.new()
+	icon_sprite.texture = icon
+	icon_sprite.show_behind_parent = true  # keep shadow + count drawn on top
+	var s := 26.0 / float(icon.get_height())
+	icon_sprite.scale = Vector2(s, s)
+	add_child(icon_sprite)
 
 func _process(delta: float) -> void:
 	bob_phase += delta * 3.0
 	attract_timer -= delta
+	if icon_sprite:
+		icon_sprite.position = Vector2(0, sin(bob_phase) * 3.0)
 
 	if is_instance_valid(magnetize_to) and attract_timer <= 0:
 		var dir: Vector2 = (magnetize_to.global_position - global_position)
@@ -51,24 +66,20 @@ func attract(player: Node) -> void:
 	attract_timer = 0.5  # Small delay before magnetizing
 
 func _draw() -> void:
-	var item_data = ItemDatabase.get_item(item_id)
-	var color := Color(0.8, 0.8, 0.8)
-	var display_name := item_id
-	if item_data:
-		color = item_data.color
-		display_name = item_data.display_name
-
 	var bob_y := sin(bob_phase) * 3.0
 
 	# Shadow
 	_draw_ellipse(Vector2(0, 10), Vector2(8, 3), 0, TAU, Color(0, 0, 0, 0.25), 0, true)
 
-	# Item circle
-	draw_circle(Vector2(0, bob_y), 10, color)
-	draw_arc(Vector2(0, bob_y), 10, 0, TAU, 20, color.lightened(0.4), 2.0)
-
-	# Shine
-	draw_circle(Vector2(-3, bob_y - 3), 3, Color(1, 1, 1, 0.4))
+	# Procedural blob only when there is no icon sprite (fallback)
+	if icon_sprite == null:
+		var item_data = ItemDatabase.get_item(item_id)
+		var color := Color(0.8, 0.8, 0.8)
+		if item_data:
+			color = item_data.color
+		draw_circle(Vector2(0, bob_y), 10, color)
+		draw_arc(Vector2(0, bob_y), 10, 0, TAU, 20, color.lightened(0.4), 2.0)
+		draw_circle(Vector2(-3, bob_y - 3), 3, Color(1, 1, 1, 0.4))
 
 	# Amount label
 	if amount > 1:

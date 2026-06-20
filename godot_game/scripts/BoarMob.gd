@@ -24,6 +24,9 @@ func _ready() -> void:
 	]
 	super._ready()
 
+func _sprite_name() -> String:
+	return "boar"
+
 func _on_aggro(player: Node) -> void:
 	# Boar only aggros when attacked
 	if was_attacked:

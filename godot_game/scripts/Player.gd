@@ -30,6 +30,8 @@ var has_torch_equipped: bool = false
 var walk_cycle: float = 0.0
 var hit_flash: float = 0.0
 
+var sprite: AnimatedSprite2D = null
+
 func _ready() -> void:
 	stats = PlayerStats.new()
 	add_child(stats)
@@ -77,12 +79,53 @@ func _ready() -> void:
 	GameManager.register_player(self)
 	stats.died.connect(_on_died)
 	inventory.item_equipped.connect(_on_item_equipped)
+	_setup_sprite()
+
+func _setup_sprite() -> void:
+	var sf := Assets.sprite_frames("player", [
+		{"anim": "idle", "count": 1, "fps": 4.0, "loop": true},
+		{"anim": "walk", "count": 2, "fps": 9.0, "loop": true},
+		{"anim": "attack", "count": 1, "fps": 10.0, "loop": false},
+	])
+	if sf == null:
+		return
+	sprite = AnimatedSprite2D.new()
+	sprite.sprite_frames = sf
+	sprite.animation = "idle"
+	sprite.show_behind_parent = true  # keep equipped item / attack arc on top
+	var tex := sf.get_frame_texture("idle", 0)
+	var s := 56.0 / float(tex.get_height())
+	sprite.scale = Vector2(s, s)
+	add_child(sprite)
+	sprite.play("idle")
+
+func _update_sprite() -> void:
+	if sprite == null:
+		return
+	if is_attacking:
+		if sprite.animation != "attack":
+			sprite.play("attack")
+	elif velocity.length() > 10.0:
+		if sprite.animation != "walk":
+			sprite.play("walk")
+	else:
+		if sprite.animation != "idle":
+			sprite.play("idle")
+	if absf(facing.x) > 0.1:
+		sprite.flip_h = facing.x < 0.0
+	if hit_flash > 0.5:
+		sprite.modulate = Color(1.8, 1.8, 1.8)
+	elif is_dodging:
+		sprite.modulate = Color(0.85, 0.92, 1.0, 0.7)
+	else:
+		sprite.modulate = Color.WHITE
 
 func _physics_process(delta: float) -> void:
 	_handle_timers(delta)
 	_handle_input(delta)
 	_handle_movement(delta)
 	_check_light()
+	_update_sprite()
 	queue_redraw()
 
 func _handle_timers(delta: float) -> void:
@@ -219,46 +262,54 @@ func get_attack_damage() -> int:
 	return BASE_DAMAGE
 
 func _draw() -> void:
-	var base_color := Color(0.35, 0.55, 0.9)
-	if hit_flash > 0.5:
-		base_color = Color(1.0, 0.3, 0.3)
-	elif is_dodging:
-		base_color = Color(0.8, 0.9, 1.0, 0.7)
+	# Procedural body only when there is no sprite (fallback).
+	if sprite == null:
+		var base_color := Color(0.35, 0.55, 0.9)
+		if hit_flash > 0.5:
+			base_color = Color(1.0, 0.3, 0.3)
+		elif is_dodging:
+			base_color = Color(0.8, 0.9, 1.0, 0.7)
 
-	# Legs (animated)
-	var leg_offset := sin(walk_cycle) * 8.0 if velocity.length() > 20.0 else 0.0
-	draw_circle(Vector2(-7, 16 + leg_offset), 5, Color(0.25, 0.35, 0.7))
-	draw_circle(Vector2(7, 16 - leg_offset), 5, Color(0.25, 0.35, 0.7))
+		# Legs (animated)
+		var leg_offset := sin(walk_cycle) * 8.0 if velocity.length() > 20.0 else 0.0
+		draw_circle(Vector2(-7, 16 + leg_offset), 5, Color(0.25, 0.35, 0.7))
+		draw_circle(Vector2(7, 16 - leg_offset), 5, Color(0.25, 0.35, 0.7))
 
-	# Body
-	var body_rect := Rect2(-14, -12, 28, 28)
-	draw_rect(body_rect, base_color)
+		# Body
+		var body_rect := Rect2(-14, -12, 28, 28)
+		draw_rect(body_rect, base_color)
 
-	# Head
-	draw_circle(Vector2(0, -20), 14, base_color)
+		# Head
+		draw_circle(Vector2(0, -20), 14, base_color)
 
-	# Eyes showing facing direction
-	var eye_offset := facing * 6.0 + Vector2(-4, -20)
-	draw_circle(eye_offset, 3, Color.WHITE)
-	draw_circle(eye_offset + Vector2(8, 0), 3, Color.WHITE)
-	draw_circle(eye_offset + facing * 1.5, 1.5, Color(0.1, 0.1, 0.2))
-	draw_circle(eye_offset + Vector2(8, 0) + facing * 1.5, 1.5, Color(0.1, 0.1, 0.2))
+		# Eyes showing facing direction
+		var eye_offset := facing * 6.0 + Vector2(-4, -20)
+		draw_circle(eye_offset, 3, Color.WHITE)
+		draw_circle(eye_offset + Vector2(8, 0), 3, Color.WHITE)
+		draw_circle(eye_offset + facing * 1.5, 1.5, Color(0.1, 0.1, 0.2))
+		draw_circle(eye_offset + Vector2(8, 0) + facing * 1.5, 1.5, Color(0.1, 0.1, 0.2))
 
 	# Equipped item indicator
 	var equipped_id := inventory.get_equipped_item()
 	if equipped_id != "":
-		var item_data = ItemDatabase.get_item(equipped_id)
-		if item_data:
-			var hand_pos := facing * 22.0 + Vector2(14, 0).rotated(atan2(facing.y, facing.x))
-			draw_circle(hand_pos, 6, item_data.color)
+		var hand_pos := facing * 22.0 + Vector2(14, 0).rotated(atan2(facing.y, facing.x))
+		var icon := Assets.item_icon(equipped_id)
+		if icon:
+			var sz := Vector2(20, 20)
+			draw_texture_rect(icon, Rect2(hand_pos - sz * 0.5, sz), false)
+		else:
+			var item_data = ItemDatabase.get_item(equipped_id)
+			if item_data:
+				draw_circle(hand_pos, 6, item_data.color)
 
 	# Attack arc
 	if is_attacking:
 		var attack_angle := atan2(facing.y, facing.x)
 		draw_arc(Vector2.ZERO, ATTACK_RADIUS, attack_angle - 0.6, attack_angle + 0.6, 16, Color(1.0, 0.8, 0.2, 0.45), 8.0)
 
-	# Direction arrow
-	draw_line(Vector2.ZERO, facing * 22.0, Color(1, 1, 1, 0.3), 2.0)
+	# Direction arrow (fallback body only)
+	if sprite == null:
+		draw_line(Vector2.ZERO, facing * 22.0, Color(1, 1, 1, 0.3), 2.0)
 
 	# Light radius indicator (torch)
 	if has_torch_equipped:
