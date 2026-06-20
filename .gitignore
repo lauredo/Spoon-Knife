@@ -1,0 +1,25 @@
+# Godot generated files
+godot_game/.godot/
+
+# Export builds
+godot_game/builds/
+*.apk
+*.aab
+*.zip
+*.exe
+*.x86_64
+*.html
+*.pck
+*.wasm
+*.js
+
+# Godot editor temp files
+*.import
+*.translation
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Node.js
+node_modules/
