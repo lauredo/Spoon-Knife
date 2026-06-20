@@ -12,14 +12,19 @@ z_index = -10
 color = Color(0.12, 0.18, 0.1, 1)
 
 [node name="World" type="Node2D" parent="."]
+y_sort_enabled = true
 
 [node name="Resources" type="Node2D" parent="World"]
+y_sort_enabled = true
 
 [node name="Mobs" type="Node2D" parent="World"]
+y_sort_enabled = true
 
 [node name="Structures" type="Node2D" parent="World"]
+y_sort_enabled = true
 
 [node name="DroppedItems" type="Node2D" parent="World"]
+y_sort_enabled = true
 
 [node name="DarknessOverlay" type="ColorRect" parent="."]
 z_index = 50

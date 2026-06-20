@@ -52,7 +52,8 @@ func _spawn_player() -> void:
 	player = Player.new()
 	player.name = "Player"
 	player.position = Vector2.ZERO
-	player.z_index = 10
+	# No z_index: the player is Y-sorted with the world so it goes behind/in front
+	# of trees, rocks and mobs based on its position.
 	world.add_child(player)
 	GameManager.register_player(player)
 

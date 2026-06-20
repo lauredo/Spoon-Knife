@@ -22,13 +22,17 @@ var _sprite_base_pos: Vector2 = Vector2.ZERO
 
 func _ready() -> void:
 	_setup_type()
+	# Layer 8 = Resources (used by the player's interact area). Trees and rocks ALSO
+	# sit on layer 1 (World) so the player and mobs physically collide with them;
+	# bushes and grass stay non-blocking (interaction only, walk-through).
 	collision_layer = 8
+	if resource_type == ResourceType.TREE or resource_type == ResourceType.ROCK:
+		collision_layer |= 1
 	collision_mask = 0
 
 	var col := CollisionShape2D.new()
-	var shape := CircleShape2D.new()
-	shape.radius = _get_collision_radius()
-	col.shape = shape
+	col.shape = _make_collision_shape()
+	col.position = _get_collision_offset()
 	add_child(col)
 
 	_setup_sprite()
@@ -103,11 +107,29 @@ func _setup_type() -> void:
 
 func _get_collision_radius() -> float:
 	match resource_type:
-		ResourceType.TREE: return 18.0
-		ResourceType.ROCK: return 22.0
+		ResourceType.ROCK: return 17.0
 		ResourceType.BUSH: return 14.0
 		ResourceType.GRASS_TUFT: return 10.0
 	return 16.0
+
+# Tree uses a slim vertical capsule that matches the trunk in tree.svg, so the player
+# can walk behind the canopy and only the trunk blocks. Others use a circle.
+func _make_collision_shape() -> Shape2D:
+	if resource_type == ResourceType.TREE:
+		var cap := CapsuleShape2D.new()
+		cap.radius = 6.5
+		cap.height = 43.0   # trunk runs from y~-38 (top) to y~+5 (base) in node space
+		return cap
+	var circle := CircleShape2D.new()
+	circle.radius = _get_collision_radius()
+	return circle
+
+# Offsets the collision shape so its base sits at the base of the trunk/rock.
+func _get_collision_offset() -> Vector2:
+	match resource_type:
+		ResourceType.TREE: return Vector2(0, -16.5)  # capsule base lands at the trunk base (~y+5)
+		ResourceType.ROCK: return Vector2(0, -2)
+	return Vector2.ZERO
 
 func _process(delta: float) -> void:
 	shake_amount = max(0.0, shake_amount - delta * 4.0)
