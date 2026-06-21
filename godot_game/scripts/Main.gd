@@ -4,6 +4,7 @@ extends Node2D
 @onready var darkness_overlay: ColorRect = $DarknessOverlay
 @onready var hud_layer: HUD = $HUDLayer
 @onready var crafting_menu: CraftingMenu = $CraftingMenu
+@onready var backpack_menu: BackpackMenu = $BackpackMenu
 @onready var background: ColorRect = $Background
 
 var player: Player
@@ -107,6 +108,7 @@ func _generate_world() -> void:
 func _setup_hud() -> void:
 	hud_layer.setup(player, day_night)
 	crafting_menu.setup(player)
+	backpack_menu.setup(player)
 	GameManager.register_hud(hud_layer)
 
 func _connect_signals() -> void:

@@ -64,6 +64,22 @@ func cycle_hotbar() -> void:
 	equipped_slot = (equipped_slot + 1) % HOTBAR_SIZE
 	item_equipped.emit(get_equipped_item())
 
+## Bring an item the player already owns onto the hotbar (if it isn't there yet) and select
+## it — lets the backpack equip materials that didn't auto-fit in the 6 hotbar slots. Prefers
+## an empty slot, otherwise overwrites the currently-equipped one.
+func equip_item(item_id: String) -> void:
+	if not has_item(item_id):
+		return
+	var slot: int = hotbar.find(item_id)
+	if slot == -1:
+		slot = hotbar.find("")
+		if slot == -1:
+			slot = equipped_slot
+		hotbar[slot] = item_id
+	equipped_slot = slot
+	item_equipped.emit(get_equipped_item())
+	inventory_changed.emit()
+
 func _try_add_to_hotbar(item_id: String) -> void:
 	if item_id in hotbar:
 		return
