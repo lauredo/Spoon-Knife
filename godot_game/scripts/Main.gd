@@ -20,12 +20,39 @@ func _ready() -> void:
 	_setup_hud()
 	_connect_signals()
 
+# World px per source px for the tiled ground texture. The terrain texture is a large
+# (~980x348) varied, seamless tile (see tools/slice_terrain.gd); at 0.85 one dirt diamond
+# (~140x87 px source) is ~119x74 world px and the tile blankets most of the screen, so the
+# little remaining repetition is hard to notice.
+const TERRAIN_SCALE := 0.85
+const WORLD_SIZE := 8000.0
+
 func _setup_background() -> void:
-	background.color = Color(0.12, 0.18, 0.1)
-	background.size = Vector2(8000, 8000)
-	background.position = Vector2(-4000, -4000)
-	# Draw grid lines via shader or just leave as flat color
-	_draw_ground_detail()
+	background.size = Vector2(WORLD_SIZE, WORLD_SIZE)
+	background.position = Vector2(-WORLD_SIZE * 0.5, -WORLD_SIZE * 0.5)
+	var tex := Assets.sprite("terrain", "ground")
+	if tex:
+		# Tiled dirt sprite sheet (see tools/slice_terrain.gd). Base fill stays a matching
+		# dirt brown so nothing green shows through at the very edges of the world.
+		background.color = Color(0.30, 0.22, 0.13)
+		var ground := Sprite2D.new()
+		ground.name = "GroundTexture"
+		ground.texture = tex
+		ground.centered = false
+		ground.texture_repeat = CanvasItem.TEXTURE_REPEAT_ENABLED
+		ground.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+		ground.region_enabled = true
+		ground.scale = Vector2(TERRAIN_SCALE, TERRAIN_SCALE)
+		# region (texture space) * scale = rendered size; size it to blanket the world.
+		var span := WORLD_SIZE / TERRAIN_SCALE
+		ground.region_rect = Rect2(0, 0, span, span)
+		ground.position = Vector2(-WORLD_SIZE * 0.5, -WORLD_SIZE * 0.5)
+		ground.z_index = -9  # above the base fill, below every Y-sorted world entity
+		add_child(ground)
+	else:
+		# Fallback: old flat green + scattered procedural patches.
+		background.color = Color(0.12, 0.18, 0.1)
+		_draw_ground_detail()
 
 func _draw_ground_detail() -> void:
 	# Add some visual variety with scattered rocks/grass patches
@@ -60,6 +87,10 @@ func _spawn_player() -> void:
 func _setup_camera() -> void:
 	camera = Camera2D.new()
 	camera.name = "Camera2D"
+	# Follow the player IN THE PHYSICS STEP. The player moves in _physics_process; with the
+	# default idle callback the smoothing ran out of sync with the body and the whole screen
+	# jittered while walking (very visible now that the ground has texture).
+	camera.process_callback = Camera2D.CAMERA2D_PROCESS_PHYSICS
 	camera.position_smoothing_enabled = true
 	camera.position_smoothing_speed = 6.0
 	camera.zoom = Vector2(1.2, 1.2)
