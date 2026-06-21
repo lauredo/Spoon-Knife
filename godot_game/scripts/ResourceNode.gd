@@ -20,7 +20,11 @@ var bob_phase: float = 0.0
 var sprite: Sprite2D = null
 var _sprite_base_pos: Vector2 = Vector2.ZERO
 var _display_h: float = 0.0
-var _sway_pivot: Vector2 = Vector2.ZERO  # trunk base; trees vibrate by rotating around it
+
+# Hit-feedback shader: lerps the sprite toward `flash_color` by `flash` (0..1) while keeping
+# its original alpha, so we can pop a solid-colour silhouette. Shared across all nodes.
+const _HIT_SHADER_CODE: String = "shader_type canvas_item;\nuniform float flash : hint_range(0.0, 1.0) = 0.0;\nuniform vec4 flash_color : source_color = vec4(1.0);\nvoid fragment() {\n\tvec4 base = COLOR;\n\tvec4 tex = texture(TEXTURE, UV);\n\tvec3 rgb = mix(tex.rgb, flash_color.rgb, flash);\n\tCOLOR = vec4(rgb * base.rgb, tex.a * base.a);\n}\n"
+static var _hit_shader: Shader = null
 
 func _ready() -> void:
 	_setup_type()
@@ -51,8 +55,12 @@ func _setup_sprite() -> void:
 	_display_h = tex.get_height() * s
 	# Anchor the base slightly below origin, matching the procedural footprint.
 	_sprite_base_pos = Vector2(0, 8.0 - _display_h * 0.5)
-	_sway_pivot = Vector2(0, 8.0)  # bottom of the sprite = trunk base
 	sprite.position = _sprite_base_pos
+	# Shader material so we can flash the sprite white on hit (flash=0 = passthrough).
+	var flash_mat := ShaderMaterial.new()
+	flash_mat.shader = _get_hit_shader()
+	flash_mat.set_shader_parameter("flash", 0.0)
+	sprite.material = flash_mat
 	add_child(sprite)
 
 func _type_name() -> String:
@@ -138,19 +146,9 @@ func _process(delta: float) -> void:
 	shake_amount = max(0.0, shake_amount - delta * 9.0)
 	bob_phase += delta * 1.2
 	if sprite and not is_depleted:
-		if resource_type == ResourceType.TREE:
-			# A tree vibrates by ROTATING around its trunk base: the base stays planted and
-			# only the canopy sways. Damped oscillation (amplitude follows shake_amount).
-			if shake_amount > 0.02:
-				var amp: float = (shake_amount / 8.0) * 0.13
-				var ang: float = sin(float(Time.get_ticks_msec()) * 0.001 * 27.0) * amp
-				sprite.rotation = ang
-				sprite.position = _sway_pivot + (_sprite_base_pos - _sway_pivot).rotated(ang)
-			elif sprite.rotation != 0.0:
-				sprite.rotation = 0.0
-				sprite.position = _sprite_base_pos
-		elif shake_amount > 0.0:
-			# Rocks/bushes: small position jitter on hit (decays to 0).
+		# Trees stay planted — their hit feedback is a flash + silhouette (_flash_silhouette).
+		# Rocks/bushes still do a small position jitter on hit that decays back to 0.
+		if resource_type != ResourceType.TREE and shake_amount > 0.0:
 			sprite.position = _sprite_base_pos + Vector2(
 				randf_range(-shake_amount, shake_amount),
 				randf_range(-shake_amount * 0.5, shake_amount * 0.5))
@@ -188,6 +186,7 @@ func _take_hit(damage: float, player: Player) -> void:
 	shake_amount = 8.0
 	if resource_type == ResourceType.TREE:
 		_spawn_hit_effect()
+		_flash_silhouette()
 	queue_redraw()
 	if health <= 0.0:
 		_harvest(player)
@@ -221,6 +220,42 @@ func _spawn_hit_effect() -> void:
 		tw.tween_property(leaf, "modulate:a", 0.0, dur).set_ease(Tween.EASE_IN)
 		tw.set_parallel(false)
 		tw.tween_callback(leaf.queue_free)
+
+## Hit feedback (TREE): a quick white flash on the tree plus a solid-white silhouette that
+## pops out of it and fades — replaces the old canopy-shake (see [[sprite-pipeline]]).
+func _flash_silhouette() -> void:
+	if sprite == null:
+		return
+	# 1) Flash the tree itself white, then ease it back over a beat.
+	var mat := sprite.material as ShaderMaterial
+	if mat:
+		mat.set_shader_parameter("flash", 1.0)
+		var ft := create_tween()
+		ft.tween_property(mat, "shader_parameter/flash", 0.0, 0.12).set_ease(Tween.EASE_OUT)
+	# 2) Solid-white silhouette ghost that grows slightly and fades out — "saindo" da árvore.
+	var ghost := Sprite2D.new()
+	ghost.texture = sprite.texture
+	ghost.scale = sprite.scale
+	ghost.position = _sprite_base_pos
+	ghost.z_index = 6
+	ghost.modulate = Color(1.0, 1.0, 1.0, 0.85)
+	var gmat := ShaderMaterial.new()
+	gmat.shader = _get_hit_shader()
+	gmat.set_shader_parameter("flash", 1.0)  # full silhouette
+	ghost.material = gmat
+	add_child(ghost)
+	var tw := create_tween()
+	tw.set_parallel(true)
+	tw.tween_property(ghost, "scale", sprite.scale * 1.18, 0.18).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+	tw.tween_property(ghost, "modulate:a", 0.0, 0.18).set_ease(Tween.EASE_OUT)
+	tw.set_parallel(false)
+	tw.tween_callback(ghost.queue_free)
+
+static func _get_hit_shader() -> Shader:
+	if _hit_shader == null:
+		_hit_shader = Shader.new()
+		_hit_shader.code = _HIT_SHADER_CODE
+	return _hit_shader
 
 func _harvest(player: Player) -> void:
 	for drop_info in drops:
