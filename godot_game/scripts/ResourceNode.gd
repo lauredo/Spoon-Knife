@@ -19,6 +19,8 @@ var bob_phase: float = 0.0
 
 var sprite: Sprite2D = null
 var _sprite_base_pos: Vector2 = Vector2.ZERO
+var _display_h: float = 0.0
+var _sway_pivot: Vector2 = Vector2.ZERO  # trunk base; trees vibrate by rotating around it
 
 func _ready() -> void:
 	_setup_type()
@@ -46,9 +48,10 @@ func _setup_sprite() -> void:
 	sprite.show_behind_parent = true  # keep health bar / overlays drawn on top
 	var s := _sprite_target_height() / float(tex.get_height())
 	sprite.scale = Vector2(s, s)
-	var display_h := tex.get_height() * s
+	_display_h = tex.get_height() * s
 	# Anchor the base slightly below origin, matching the procedural footprint.
-	_sprite_base_pos = Vector2(0, 8.0 - display_h * 0.5)
+	_sprite_base_pos = Vector2(0, 8.0 - _display_h * 0.5)
+	_sway_pivot = Vector2(0, 8.0)  # bottom of the sprite = trunk base
 	sprite.position = _sprite_base_pos
 	add_child(sprite)
 
@@ -132,12 +135,27 @@ func _get_collision_offset() -> Vector2:
 	return Vector2.ZERO
 
 func _process(delta: float) -> void:
-	shake_amount = max(0.0, shake_amount - delta * 4.0)
+	shake_amount = max(0.0, shake_amount - delta * 9.0)
 	bob_phase += delta * 1.2
 	if sprite and not is_depleted:
-		sprite.position = _sprite_base_pos + Vector2(
-			randf_range(-shake_amount, shake_amount),
-			randf_range(-shake_amount * 0.5, shake_amount * 0.5) + sin(bob_phase) * 2.0)
+		if resource_type == ResourceType.TREE:
+			# A tree vibrates by ROTATING around its trunk base: the base stays planted and
+			# only the canopy sways. Damped oscillation (amplitude follows shake_amount).
+			if shake_amount > 0.02:
+				var amp: float = (shake_amount / 8.0) * 0.13
+				var ang: float = sin(float(Time.get_ticks_msec()) * 0.001 * 27.0) * amp
+				sprite.rotation = ang
+				sprite.position = _sway_pivot + (_sprite_base_pos - _sway_pivot).rotated(ang)
+			elif sprite.rotation != 0.0:
+				sprite.rotation = 0.0
+				sprite.position = _sprite_base_pos
+		elif shake_amount > 0.0:
+			# Rocks/bushes: small position jitter on hit (decays to 0).
+			sprite.position = _sprite_base_pos + Vector2(
+				randf_range(-shake_amount, shake_amount),
+				randf_range(-shake_amount * 0.5, shake_amount * 0.5))
+		else:
+			sprite.position = _sprite_base_pos
 	if is_depleted:
 		regrow_timer -= delta
 		if regrow_timer <= 0.0:
@@ -168,9 +186,41 @@ func interact(player: Player) -> void:
 func _take_hit(damage: float, player: Player) -> void:
 	health -= damage
 	shake_amount = 8.0
+	if resource_type == ResourceType.TREE:
+		_spawn_hit_effect()
 	queue_redraw()
 	if health <= 0.0:
 		_harvest(player)
+
+## A few leaves shake loose from the canopy and drift down when the tree is chopped
+## (individual leaf sprites from trees.png HIT EFFECTS, see tools/slice_trees.gd).
+func _spawn_hit_effect() -> void:
+	var leaves: Array[Texture2D] = []
+	for i in 8:
+		var t := Assets.sprite("effects", "leaf_%d" % i)
+		if t:
+			leaves.append(t)
+	if leaves.is_empty():
+		return
+	for k in randi_range(2, 4):
+		var leaf := Sprite2D.new()
+		leaf.texture = leaves[randi() % leaves.size()]
+		leaf.z_index = 5
+		# start somewhere in the canopy
+		var start := Vector2(randf_range(-_display_h * 0.22, _display_h * 0.22), -_display_h * 0.6)
+		leaf.position = start
+		leaf.scale = Vector2(0.5, 0.5)
+		leaf.rotation = randf() * TAU
+		add_child(leaf)
+		var dur := randf_range(0.8, 1.3)
+		var dest := start + Vector2(randf_range(-18.0, 18.0), _display_h * 0.55 + randf_range(0.0, 20.0))
+		var tw := create_tween()
+		tw.set_parallel(true)
+		tw.tween_property(leaf, "position", dest, dur).set_trans(Tween.TRANS_SINE)
+		tw.tween_property(leaf, "rotation", leaf.rotation + randf_range(-2.5, 2.5), dur)
+		tw.tween_property(leaf, "modulate:a", 0.0, dur).set_ease(Tween.EASE_IN)
+		tw.set_parallel(false)
+		tw.tween_callback(leaf.queue_free)
 
 func _harvest(player: Player) -> void:
 	for drop_info in drops:
