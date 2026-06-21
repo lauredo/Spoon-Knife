@@ -17,6 +17,7 @@ var inventory: Inventory
 var facing := Vector2.DOWN
 var is_attacking := false
 var is_dodging := false
+var is_moving := false  # driven by input, not velocity (post-slide velocity is unreliable)
 var attack_timer := 0.0
 var dodge_timer := 0.0
 var dodge_cooldown := 0.0
@@ -107,31 +108,21 @@ func _setup_sprite() -> void:
 	add_child(sprite)
 	sprite.play("idle_se")
 
-# Maps the facing vector to one of the 4 isometric directions.
-func _iso_dir() -> String:
-	var right := facing.x >= 0.0
-	if facing.y >= 0.0:
-		return "se" if right else "sw"
-	return "ne" if right else "nw"
-
 func _update_sprite() -> void:
 	if sprite == null:
 		return
-	var dir := _iso_dir()
-	var flip := false
+	# Back view (NE) only when up is the dominant direction; otherwise the front view (SE).
+	# Left/right is a horizontal flip of the same art, so going left never shows the back.
+	var going_up := facing.y < 0.0 and absf(facing.y) > absf(facing.x)
+	var base := "ne" if going_up else "se"
 	var anim := ""
 	if is_attacking:
-		anim = "attack_se" if (dir == "se" or dir == "ne") else "attack_sw"
+		anim = "attack_se"  # attack art is front-only; flip handles left
 	else:
-		var adir := dir
-		if dir == "nw":
-			adir = "ne"  # no NW art -> mirror NE
-			flip = true
-		var act := "walk_" if velocity.length() > 10.0 else "idle_"
-		anim = act + adir
+		anim = ("walk_" if is_moving else "idle_") + base
 	if sprite.animation != anim:
 		sprite.play(anim)
-	sprite.flip_h = flip
+	sprite.flip_h = facing.x < 0.0
 	if hit_flash > 0.5:
 		sprite.modulate = Color(1.8, 1.8, 1.8)
 	elif is_dodging:
@@ -180,12 +171,15 @@ func _handle_movement(delta: float) -> void:
 
 	if is_dodging:
 		velocity = facing * DODGE_SPEED
+		is_moving = true
 	elif input_dir.length() > 0.1:
 		facing = input_dir.normalized()
 		velocity = input_dir.normalized() * SPEED
 		walk_cycle += delta * 8.0
+		is_moving = true
 	else:
 		velocity = velocity.move_toward(Vector2.ZERO, SPEED * 4.0 * delta)
+		is_moving = false
 
 	move_and_slide()
 

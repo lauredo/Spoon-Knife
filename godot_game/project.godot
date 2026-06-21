@@ -127,4 +127,5 @@ restart={
 
 [rendering]
 
+textures/canvas_textures/default_texture_filter=0
 environment/defaults/default_clear_color=Color(0.1, 0.15, 0.1, 1)
