@@ -31,13 +31,19 @@ func setup(_item_id: String, _amount: int = 1) -> void:
 	_setup_icon()
 
 func _setup_icon() -> void:
-	var icon := Assets.item_icon(item_id)
+	# Prefer a dedicated "on the ground" sprite (drops/<id>.png) over the flat inventory icon.
+	var target_h := 26.0
+	var icon := Assets.sprite("drops", item_id)
+	if icon != null:
+		target_h = 32.0  # ground sprites are more detailed; give them a touch more size
+	else:
+		icon = Assets.item_icon(item_id)
 	if icon == null:
 		return
 	icon_sprite = Sprite2D.new()
 	icon_sprite.texture = icon
 	icon_sprite.show_behind_parent = true  # keep shadow + count drawn on top
-	var s := 26.0 / float(icon.get_height())
+	var s := target_h / float(icon.get_height())
 	icon_sprite.scale = Vector2(s, s)
 	add_child(icon_sprite)
 
