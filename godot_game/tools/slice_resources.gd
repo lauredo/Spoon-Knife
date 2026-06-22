@@ -12,11 +12,11 @@ extends SceneTree
 const SRC := "res://assets/external-sprites/resources.png"
 
 const CELLS := [
-	{"out": "resources/rock.png", "x": 120, "y": 268, "w": 322, "h": 322, "mode": "gray"},   # Pedra grande
+	{"out": "resources/rock.png", "x": 120, "y": 268, "w": 322, "h": 322, "mode": "solid", "color": "gray"},  # Pedra grande
 	{"out": "resources/bush.png", "x": 623, "y": 44,  "w": 168, "h": 164, "mode": "green"},  # Arbusto
-	{"out": "drops/stone.png",    "x": 633, "y": 270, "w": 128, "h": 122, "mode": "gray"},   # Pedra caída
+	{"out": "drops/stone.png",    "x": 648, "y": 276, "w": 104, "h": 108, "mode": "gray"},   # Pedra caída (tight rect = no frame)
 	{"out": "drops/meat.png",     "x": 635, "y": 460, "w": 135, "h": 122, "mode": "red"},    # Carne caída
-	{"out": "drops/wood.png",     "x": 635, "y": 648, "w": 132, "h": 120, "mode": "flood"},  # Madeira caída
+	{"out": "drops/wood.png",     "x": 644, "y": 653, "w": 120, "h": 113, "mode": "flood"},  # Madeira caída
 ]
 
 var img: Image
@@ -36,6 +36,8 @@ func _initialize() -> void:
 		var mode: String = cell.mode
 		if mode == "flood":
 			_extract_flood(cell)
+		elif mode == "solid":
+			_extract_solid(cell, cell.get("color", "gray"))
 		else:
 			_extract_color(cell, mode)
 	print("SLICE_RESOURCES DONE")
@@ -93,10 +95,63 @@ func _extract_color(cell: Dictionary, mode: String) -> void:
 				continue
 			# Keep the sprite's own dark outline, but for gray/green sprites reject the warm dirt
 			# frame (the outline there is neutral; the frame is warm). Meat's outline IS warm red.
-			var neutral: bool = (max(rr, max(gg, bb)) - min(rr, min(gg, bb))) < 12.0
+			var neutral: bool = (max(rr, max(gg, bb)) - min(rr, min(gg, bb))) <= 7.0
 			if mode == "red" or neutral:
 				keep[i] = 1  # dark outline hugging the sprite
 	_save_keep(cell.out, keep, cw, ch, x0, y0)
+
+## "Solid" extraction: keep the colour-family body PLUS everything enclosed by it (interior
+## crevices), dropping only what's reachable from the border (navy, the dirt tile and its
+## straight frame/edge halo). Used for the big rock, whose blocky bbox made the frame read as a
+## square that color/flood keys couldn't tell from a real outline.
+func _extract_solid(cell: Dictionary, mode: String) -> void:
+	var x0: int = cell.x
+	var y0: int = cell.y
+	var x1: int = mini(int(cell.x + cell.w), W)
+	var y1: int = mini(int(cell.y + cell.h), H)
+	var cw := x1 - x0
+	var ch := y1 - y0
+
+	var core := PackedByteArray()
+	core.resize(cw * ch)
+	for ly in range(ch):
+		for lx in range(cw):
+			core[ly * cw + lx] = 1 if _is_core(img.get_pixel(x0 + lx, y0 + ly), mode) else 0
+
+	# Flood "exterior" inward from the border through NON-core pixels.
+	var ext := PackedByteArray()
+	ext.resize(cw * ch)
+	var stack: Array[int] = []
+	for lx in range(cw):
+		_sseed(lx, 0, cw, ch, core, ext, stack)
+		_sseed(lx, ch - 1, cw, ch, core, ext, stack)
+	for ly in range(ch):
+		_sseed(0, ly, cw, ch, core, ext, stack)
+		_sseed(cw - 1, ly, cw, ch, core, ext, stack)
+	while not stack.is_empty():
+		var p: int = stack.pop_back()
+		var px := p % cw
+		var py := p / cw
+		_sseed(px + 1, py, cw, ch, core, ext, stack)
+		_sseed(px - 1, py, cw, ch, core, ext, stack)
+		_sseed(px, py + 1, cw, ch, core, ext, stack)
+		_sseed(px, py - 1, cw, ch, core, ext, stack)
+
+	# Keep everything that isn't exterior (= body + enclosed interior).
+	var keep := PackedByteArray()
+	keep.resize(cw * ch)
+	for i in range(cw * ch):
+		keep[i] = 1 if ext[i] == 0 else 0
+	_save_keep(cell.out, keep, cw, ch, x0, y0)
+
+func _sseed(lx: int, ly: int, cw: int, ch: int, core: PackedByteArray, ext: PackedByteArray, stack: Array) -> void:
+	if lx < 0 or lx >= cw or ly < 0 or ly >= ch:
+		return
+	var i := ly * cw + lx
+	if ext[i] == 1 or core[i] == 1:
+		return
+	ext[i] = 1
+	stack.append(i)
 
 func _near_core(core: PackedByteArray, cw: int, ch: int, lx: int, ly: int, rad: int) -> bool:
 	for dy in range(-rad, rad + 1):
@@ -194,8 +249,33 @@ func _extract_flood(cell: Dictionary) -> void:
 	keep.resize(cw * ch)
 	for i in range(cw * ch):
 		keep[i] = 1 if flood[i] == 0 else 0
+	_open_mask(keep, cw, ch)  # drop thin (1px) stray bits like leftover frame slivers
 	_keep_main_blob(keep, cw, ch)
 	_save_keep(cell.out, keep, cw, ch, x0, y0)
+
+## Morphological opening (erode then dilate, 4-connected): removes 1px-thin protrusions/specks
+## while leaving solid shapes intact.
+func _open_mask(keep: PackedByteArray, cw: int, ch: int) -> void:
+	var eroded := PackedByteArray()
+	eroded.resize(cw * ch)
+	for ly in range(ch):
+		for lx in range(cw):
+			var i := ly * cw + lx
+			var on := keep[i] == 1
+			if on and lx > 0 and keep[i - 1] == 0: on = false
+			if on and lx < cw - 1 and keep[i + 1] == 0: on = false
+			if on and ly > 0 and keep[i - cw] == 0: on = false
+			if on and ly < ch - 1 and keep[i + cw] == 0: on = false
+			eroded[i] = 1 if on else 0
+	for ly in range(ch):
+		for lx in range(cw):
+			var i := ly * cw + lx
+			var on := eroded[i] == 1
+			if not on and lx > 0 and eroded[i - 1] == 1: on = true
+			if not on and lx < cw - 1 and eroded[i + 1] == 1: on = true
+			if not on and ly > 0 and eroded[i - cw] == 1: on = true
+			if not on and ly < ch - 1 and eroded[i + cw] == 1: on = true
+			keep[i] = 1 if on else 0
 
 func _fseed(lx: int, ly: int, cw: int, ch: int, floodable: PackedByteArray, flood: PackedByteArray, stack: Array) -> void:
 	if lx < 0 or lx >= cw or ly < 0 or ly >= ch:
