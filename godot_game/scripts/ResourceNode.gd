@@ -129,7 +129,7 @@ func _get_collision_radius() -> float:
 func _make_collision_shape() -> Shape2D:
 	if resource_type == ResourceType.TREE:
 		var cap := CapsuleShape2D.new()
-		cap.radius = 6.5
+		cap.radius = 12.0   # wider than the thin trunk so you bump the tree instead of walking into it
 		cap.height = 43.0   # trunk runs from y~-38 (top) to y~+5 (base) in node space
 		return cap
 	var circle := CircleShape2D.new()

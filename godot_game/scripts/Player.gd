@@ -10,6 +10,8 @@ const DODGE_COOLDOWN := 1.2
 const ATTACK_COOLDOWN := 0.5
 const INTERACT_RADIUS := 80.0
 const ATTACK_RADIUS := 65.0
+const CHOP_RADIUS := 26.0   # resource harvest reach — short, so you must be close + facing the node
+const CHOP_OFFSET := 30.0
 const BASE_DAMAGE := 20
 
 var stats: PlayerStats
@@ -266,14 +268,27 @@ func _perform_attack() -> void:
 			if item_data and item_data.durability > 0:
 				inventory.use_durability(equipped_id, 1)
 
-	# Chop / mine / gather resource nodes in front: trees (axe), rocks (pickaxe), bushes. The
-	# tool requirement & durability are handled inside the node. Grass is interact-only.
-	query.collision_mask = 8  # resources layer
-	var res_hits := space.intersect_shape(query, 8)
-	for res in res_hits:
+	# Chop / mine / gather a resource node in front: trees (axe), rocks (pickaxe), bushes. Uses a
+	# much SHORTER reach than combat so you have to be close and facing it (no hitting a tree from
+	# well below). Only the single closest node is harvested. Grass is interact-only.
+	var chop_query := PhysicsShapeQueryParameters2D.new()
+	var chop_shape := CircleShape2D.new()
+	chop_shape.radius = CHOP_RADIUS
+	chop_query.shape = chop_shape
+	chop_query.transform = Transform2D(0.0, global_position + facing * CHOP_OFFSET)
+	chop_query.collision_mask = 8  # resources layer
+	var best_node: ResourceNode = null
+	var best_dist := INF
+	for res in space.intersect_shape(chop_query, 8):
 		var node := res.collider as ResourceNode
-		if node != null and node.resource_type != ResourceNode.ResourceType.GRASS_TUFT:
-			node.chop(self)
+		if node == null or node.resource_type == ResourceNode.ResourceType.GRASS_TUFT:
+			continue
+		var d := global_position.distance_to(node.global_position)
+		if d < best_dist:
+			best_dist = d
+			best_node = node
+	if best_node != null:
+		best_node.chop(self)
 
 	await get_tree().create_timer(0.18).timeout
 	is_attacking = false
