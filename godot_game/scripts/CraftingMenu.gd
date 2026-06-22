@@ -130,6 +130,7 @@ func _add_recipe_row(recipe, near_structures: Array) -> void:
 	var icon := Assets.item_icon(recipe.result_item)
 	if icon:
 		var tr := TextureRect.new()
+		tr.expand_mode = TextureRect.EXPAND_IGNORE_SIZE  # don't let the 256px icon blow up the row
 		tr.texture = icon
 		tr.custom_minimum_size = Vector2(36, 36)
 		tr.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
