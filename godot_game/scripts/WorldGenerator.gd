@@ -25,9 +25,34 @@ func setup(world: Node2D, dnc: DayNightCycle) -> void:
 	structures_node = world.get_node("Structures")
 	items_node = world.get_node("DroppedItems")
 
+const BOUND := HALF_WORLD + 60.0  # play-area edge (just outside the outermost resources)
+const WALL_T := 80.0
+
 func generate() -> void:
 	_generate_resources()
 	_generate_mobs()
+	_create_boundaries()
+
+## Invisible walls around the play area so the player can't wander out into the empty terrain.
+func _create_boundaries() -> void:
+	var body := StaticBody2D.new()
+	body.name = "Boundary"
+	body.collision_layer = 1  # World — the player (mask 1) bumps it
+	body.collision_mask = 0
+	var span := BOUND * 2.0 + WALL_T * 2.0
+	_add_wall(body, Vector2(0.0, -BOUND - WALL_T * 0.5), Vector2(span, WALL_T))         # top
+	_add_wall(body, Vector2(0.0, BOUND + WALL_T * 0.5), Vector2(span, WALL_T))          # bottom
+	_add_wall(body, Vector2(-BOUND - WALL_T * 0.5, 0.0), Vector2(WALL_T, BOUND * 2.0))  # left
+	_add_wall(body, Vector2(BOUND + WALL_T * 0.5, 0.0), Vector2(WALL_T, BOUND * 2.0))   # right
+	world_node.add_child(body)
+
+func _add_wall(body: StaticBody2D, pos: Vector2, size: Vector2) -> void:
+	var col := CollisionShape2D.new()
+	var shape := RectangleShape2D.new()
+	shape.size = size
+	col.shape = shape
+	col.position = pos
+	body.add_child(col)
 
 func _generate_resources() -> void:
 	var rng := RandomNumberGenerator.new()
@@ -114,10 +139,18 @@ func place_structure(structure_type: String, position: Vector2, player: Player) 
 	match structure_type:
 		"campfire":
 			return _place_campfire(position, player)
+		"chest":
+			return _place_chest(position, player)
 	return false
 
 func _place_campfire(pos: Vector2, player: Player) -> bool:
 	var campfire := Campfire.new()
 	campfire.position = pos
 	structures_node.add_child(campfire)
+	return true
+
+func _place_chest(pos: Vector2, player: Player) -> bool:
+	var chest := Chest.new()
+	chest.position = pos
+	structures_node.add_child(chest)
 	return true
