@@ -53,7 +53,7 @@ func _build_ui() -> void:
 	panel.add_child(title)
 
 	var hint := Label.new()
-	hint.text = "click to equip"
+	hint.text = "click: equip  |  food: eat"
 	hint.position = Vector2(120, 17)
 	hint.add_theme_font_size_override("font_size", 10)
 	hint.add_theme_color_override("font_color", Color(0.6, 0.6, 0.55))
@@ -142,7 +142,9 @@ func _make_slot(item_id: String) -> Control:
 	var slot := Panel.new()
 	slot.size = Vector2(SLOT, SLOT)
 	slot.clip_contents = true  # never let an oversized icon spill past the slot frame
-	slot.tooltip_text = item_data.display_name if item_data else item_id
+	var is_food: bool = item_data != null and item_data.type == ItemDatabase.ItemType.FOOD
+	var label_name: String = item_data.display_name if item_data else item_id
+	slot.tooltip_text = ("Comer " + label_name) if is_food else label_name
 
 	var slot_style := StyleBoxFlat.new()
 	slot_style.bg_color = Color(0.12, 0.12, 0.12, 0.9)
@@ -196,6 +198,12 @@ func _make_slot(item_id: String) -> Control:
 
 func _on_slot_gui_input(event: InputEvent, item_id: String) -> void:
 	if event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT and event.pressed:
-		if player:
+		if not player:
+			return
+		# Food is eaten on click; everything else is equipped.
+		var item_data = ItemDatabase.get_item(item_id)
+		if item_data and item_data.type == ItemDatabase.ItemType.FOOD:
+			player.eat_item(item_id)
+		else:
 			player.inventory.equip_item(item_id)
-			_refresh()
+		_refresh()
