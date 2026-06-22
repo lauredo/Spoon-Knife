@@ -80,6 +80,35 @@ func equip_item(item_id: String) -> void:
 	item_equipped.emit(get_equipped_item())
 	inventory_changed.emit()
 
+## Drag-drop: put an owned item type into a specific hotbar slot, swapping with whatever is
+## there. If it came from the backpack, the displaced type simply returns to the backpack.
+func move_to_hotbar_slot(item_id: String, slot: int) -> void:
+	if slot < 0 or slot >= HOTBAR_SIZE or not has_item(item_id):
+		return
+	var from: int = hotbar.find(item_id)  # current hotbar slot, or -1 if in the backpack
+	if from == slot:
+		equipped_slot = slot
+		item_equipped.emit(get_equipped_item())
+		return
+	var displaced: String = hotbar[slot]
+	hotbar[slot] = item_id
+	if from != -1:
+		hotbar[from] = displaced  # swap within the hotbar
+	equipped_slot = slot
+	item_equipped.emit(get_equipped_item())
+	inventory_changed.emit()
+
+## Drag-drop: take an item type off the hotbar — it stays owned and shows up in the backpack.
+func move_to_backpack(item_id: String) -> void:
+	var s: int = hotbar.find(item_id)
+	if s == -1:
+		return
+	hotbar[s] = ""
+	if equipped_slot == s:
+		equipped_slot = 0
+	item_equipped.emit(get_equipped_item())
+	inventory_changed.emit()
+
 func _try_add_to_hotbar(item_id: String) -> void:
 	if item_id in hotbar:
 		return

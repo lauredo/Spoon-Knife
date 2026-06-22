@@ -9,6 +9,7 @@ var hunger_bar: ProgressBar
 var sanity_bar: ProgressBar
 var day_label: Label
 var phase_label: Label
+var clock: DayNightClock
 var hotbar_panel: Panel
 var hotbar_slots: Array = []
 var notification_label: Label
@@ -40,22 +41,28 @@ func _build_ui() -> void:
 	hunger_bar = _make_bar(stats_panel, "Hunger", "hunger", Color(0.9, 0.65, 0.15), Color(0.2, 0.15, 0.0), 10, 45)
 	sanity_bar = _make_bar(stats_panel, "Sanity", "sanity", Color(0.3, 0.5, 0.95), Color(0.05, 0.05, 0.2), 10, 80)
 
-	# ── Day/Time (top-center) ──────────────────────────────────
+	# ── Day/Time clock (top-center) ────────────────────────────
 	var time_panel := Panel.new()
-	time_panel.size = Vector2(160, 50)
-	time_panel.position = Vector2(560, 10)
+	time_panel.size = Vector2(208, 74)
+	time_panel.position = Vector2(536, 8)
 	time_panel.add_theme_stylebox_override("panel", panel_style)
 	add_child(time_panel)
 
+	clock = DayNightClock.new()
+	clock.position = Vector2(8, 6)
+	clock.size = Vector2(60, 60)
+	time_panel.add_child(clock)
+
 	day_label = Label.new()
-	day_label.position = Vector2(8, 6)
-	day_label.size = Vector2(144, 20)
+	day_label.position = Vector2(80, 14)
+	day_label.size = Vector2(120, 24)
+	day_label.add_theme_font_size_override("font_size", 16)
 	day_label.add_theme_color_override("font_color", Color(0.95, 0.85, 0.55))
 	time_panel.add_child(day_label)
 
 	phase_label = Label.new()
-	phase_label.position = Vector2(8, 26)
-	phase_label.size = Vector2(144, 20)
+	phase_label.position = Vector2(80, 40)
+	phase_label.size = Vector2(120, 20)
 	phase_label.add_theme_color_override("font_color", Color(0.75, 0.75, 0.85))
 	time_panel.add_child(phase_label)
 
@@ -67,7 +74,9 @@ func _build_ui() -> void:
 	add_child(hotbar_panel)
 
 	for i in HOTBAR_SIZE:
-		var slot := Panel.new()
+		var slot := InventorySlot.new()
+		slot.zone = "hotbar"
+		slot.slot_index = i
 		var slot_style := StyleBoxFlat.new()
 		slot_style.bg_color = Color(0.12, 0.12, 0.12, 0.9)
 		slot_style.border_width_left = 2
@@ -111,7 +120,7 @@ func _build_ui() -> void:
 	# Controls hint (bottom-left)
 	var hint_label := Label.new()
 	hint_label.position = Vector2(10, 600)
-	hint_label.text = "WASD: Move  |  LClick: Attack  |  E: Interact  |  T: Craft  |  I: Bag  |  Space: Dodge  |  F: Cycle item"
+	hint_label.text = "WASD: Move  |  LClick: Attack  |  E: Interact  |  T: Craft  |  I: Bag  |  Space: Dodge  |  F: Cycle  |  =/-: Tempo"
 	hint_label.add_theme_font_size_override("font_size", 11)
 	hint_label.add_theme_color_override("font_color", Color(0.6, 0.6, 0.6, 0.8))
 	add_child(hint_label)
@@ -208,12 +217,18 @@ func _on_sanity_changed(current: float, maximum: float) -> void:
 		sanity_bar.value = current / maximum
 
 func _on_time_updated(t: float) -> void:
+	if clock:
+		clock.set_time(t)
 	if day_label and day_night:
-		day_label.text = "Day %d  %s" % [day_night.day_number, day_night.get_time_string()]
+		day_label.text = "Day %d" % day_night.day_number
+	if phase_label and day_night:
+		phase_label.text = day_night.get_phase_name()
 
 func _on_phase_changed(phase_name: String, day_num: int) -> void:
 	if phase_label:
 		phase_label.text = phase_name
+	if clock:
+		clock.phase = phase_name
 	show_notification(phase_name)
 
 func _update_hotbar() -> void:
@@ -223,7 +238,9 @@ func _update_hotbar() -> void:
 		_update_slot(i)
 
 func _update_slot(i: int) -> void:
-	var slot: Panel = hotbar_slots[i]
+	var slot: InventorySlot = hotbar_slots[i]
+	slot.inv = player.inventory
+	slot.item_id = player.inventory.hotbar[i] if i < player.inventory.hotbar.size() else ""
 	# Remove old item visuals (keep the number label)
 	for child in slot.get_children():
 		if child is Label and child.text.length() <= 1:
@@ -302,3 +319,25 @@ func show_game_over() -> void:
 
 	var tween := create_tween()
 	tween.tween_property(overlay, "color", Color(0, 0, 0, 0.7), 1.5)
+
+func show_victory() -> void:
+	var overlay := ColorRect.new()
+	overlay.color = Color(0, 0, 0, 0.0)
+	overlay.size = Vector2(1280, 720)
+	add_child(overlay)
+
+	var title := Label.new()
+	title.text = "VOCÊ SOBREVIVEU!"
+	title.position = Vector2(440, 270)
+	title.add_theme_font_size_override("font_size", 48)
+	title.add_theme_color_override("font_color", Color(0.45, 0.92, 0.45))
+	add_child(title)
+
+	var sub_label := Label.new()
+	sub_label.text = "Derrotou o chefe da 3ª noite — pressione R para jogar de novo"
+	sub_label.position = Vector2(420, 350)
+	sub_label.add_theme_color_override("font_color", Color(0.85, 0.95, 0.85))
+	add_child(sub_label)
+
+	var tween := create_tween()
+	tween.tween_property(overlay, "color", Color(0, 0.06, 0, 0.6), 1.5)

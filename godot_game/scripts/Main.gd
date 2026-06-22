@@ -1,7 +1,7 @@
 extends Node2D
 
 @onready var world: Node2D = $World
-@onready var darkness_overlay: ColorRect = $DarknessOverlay
+@onready var darkness_overlay: ColorRect = $DarknessLayer/DarknessOverlay
 @onready var hud_layer: HUD = $HUDLayer
 @onready var crafting_menu: CraftingMenu = $CraftingMenu
 @onready var backpack_menu: BackpackMenu = $BackpackMenu
@@ -13,6 +13,7 @@ var day_night: DayNightCycle
 var world_gen: WorldGenerator
 
 func _ready() -> void:
+	Engine.time_scale = 1.0  # reset (it persists across scene reloads)
 	_setup_background()
 	_setup_day_night()
 	_spawn_player()
@@ -118,18 +119,49 @@ func _setup_hud() -> void:
 
 func _connect_signals() -> void:
 	GameManager.game_over.connect(_on_game_over)
+	GameManager.game_won.connect(_on_victory)
 	GameManager.register_world(world)
 	day_night.phase_changed.connect(_on_phase_changed)
 
 func _process(delta: float) -> void:
 	if Input.is_action_just_pressed("ui_cancel"):
 		get_tree().quit()
-	if Input.is_action_just_pressed("restart") and GameManager.is_game_over:
+	if Input.is_action_just_pressed("restart") and (GameManager.is_game_over or GameManager.is_won):
 		get_tree().reload_current_scene()
+	if Input.is_action_just_pressed("time_faster"):
+		_set_time_scale(Engine.time_scale * 2.0)
+	if Input.is_action_just_pressed("time_slower"):
+		_set_time_scale(Engine.time_scale / 2.0)
+
+## Fast-forward for testing the day/night loop. '=' speeds up, '-' slows down (1x..8x).
+func _set_time_scale(s: float) -> void:
+	Engine.time_scale = clampf(s, 1.0, 8.0)
+	if hud_layer:
+		hud_layer.show_notification("Velocidade x%.0f" % Engine.time_scale)
 
 func _on_game_over() -> void:
+	Engine.time_scale = 1.0
 	hud_layer.show_game_over()
 	player.set_physics_process(false)
 
+func _on_victory() -> void:
+	Engine.time_scale = 1.0
+	hud_layer.show_victory()
+	player.set_physics_process(false)
+
+var _boss_spawned: bool = false
+
 func _on_phase_changed(phase: String, day: int) -> void:
 	hud_layer.show_notification("Day %d - %s" % [day, phase], 3.0)
+	# MVP climax: a boss appears on the 3rd night. Defeat it to win.
+	if phase == "Night" and day >= 3 and not _boss_spawned:
+		_boss_spawned = true
+		_spawn_boss()
+
+func _spawn_boss() -> void:
+	var boss := BossMob.new()
+	var ang := randf() * TAU
+	boss.position = player.global_position + Vector2(cos(ang), sin(ang)) * 260.0
+	world.get_node("Mobs").add_child(boss)
+	boss.died.connect(func(_m): GameManager.trigger_victory())
+	hud_layer.show_notification("⚠ Um chefe surgiu na noite!", 4.0)

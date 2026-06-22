@@ -11,7 +11,7 @@ extends CanvasLayer
 var player: Player
 var is_open: bool = false
 
-var panel: Panel
+var panel: InventorySlot   # also the drop-zone for dragging items from the hotbar into the backpack
 var slots_holder: Control
 var empty_label: Label
 
@@ -27,7 +27,8 @@ func _ready() -> void:
 	hide_menu()
 
 func _build_ui() -> void:
-	panel = Panel.new()
+	panel = InventorySlot.new()
+	panel.zone = "backpack"  # dropping anywhere on the panel moves a hotbar item to the backpack
 	panel.size = Vector2(PANEL_W, MIN_H)
 	panel.position = Vector2(640 - PANEL_W * 0.5, 360 - MIN_H * 0.5)
 
@@ -48,13 +49,15 @@ func _build_ui() -> void:
 	var title := Label.new()
 	title.text = "Backpack"
 	title.position = Vector2(12, 10)
+	title.mouse_filter = Control.MOUSE_FILTER_IGNORE  # don't block drops onto the panel
 	title.add_theme_font_size_override("font_size", 18)
 	title.add_theme_color_override("font_color", Color(0.95, 0.85, 0.55))
 	panel.add_child(title)
 
 	var hint := Label.new()
-	hint.text = "click: equip  |  food: eat"
-	hint.position = Vector2(120, 17)
+	hint.text = "click: equip/eat  |  drag: move to/from hotbar"
+	hint.position = Vector2(108, 17)
+	hint.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	hint.add_theme_font_size_override("font_size", 10)
 	hint.add_theme_color_override("font_color", Color(0.6, 0.6, 0.55))
 	panel.add_child(hint)
@@ -90,6 +93,7 @@ func _build_ui() -> void:
 func setup(p: Player) -> void:
 	player = p
 	if player and player.inventory:
+		panel.inv = player.inventory
 		player.inventory.inventory_changed.connect(_on_inventory_changed)
 
 func _on_inventory_changed() -> void:
@@ -118,7 +122,11 @@ func _refresh() -> void:
 	if not player:
 		return
 
-	var ids := player.inventory.items.keys()
+	# The backpack is a SEPARATE space from the hotbar: only show item types NOT on the hotbar.
+	var ids: Array = []
+	for id in player.inventory.items.keys():
+		if not (id in player.inventory.hotbar):
+			ids.append(id)
 	ids.sort()
 	empty_label.visible = ids.is_empty()
 
@@ -139,7 +147,10 @@ func _refresh() -> void:
 
 func _make_slot(item_id: String) -> Control:
 	var item_data = ItemDatabase.get_item(item_id)
-	var slot := Panel.new()
+	var slot := InventorySlot.new()
+	slot.zone = "backpack"
+	slot.item_id = item_id
+	slot.inv = player.inventory
 	slot.size = Vector2(SLOT, SLOT)
 	slot.clip_contents = true  # never let an oversized icon spill past the slot frame
 	var is_food: bool = item_data != null and item_data.type == ItemDatabase.ItemType.FOOD
@@ -197,7 +208,10 @@ func _make_slot(item_id: String) -> Control:
 	return slot
 
 func _on_slot_gui_input(event: InputEvent, item_id: String) -> void:
-	if event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT and event.pressed:
+	# Act on RELEASE, not press: acting on press would equip + rebuild the grid the instant you
+	# press to start a drag, killing the drag. On release, a plain click still equips/eats, while
+	# press-and-move lets the drag-and-drop start (InventorySlot._get_drag_data).
+	if event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT and not event.pressed:
 		if not player:
 			return
 		# Food is eaten on click; everything else is equipped.

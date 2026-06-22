@@ -1,10 +1,12 @@
 extends Node
 
 signal game_over
+signal game_won
 signal new_day(day_number: int)
 
 var current_day: int = 1
 var is_game_over: bool = false
+var is_won: bool = false
 var player: Node = null
 var world: Node = null
 var hud: Node = null
@@ -30,6 +32,12 @@ func trigger_game_over() -> void:
 func advance_day() -> void:
 	current_day += 1
 	new_day.emit(current_day)
+
+func trigger_victory() -> void:
+	if is_won or is_game_over:
+		return
+	is_won = true
+	game_won.emit()
 
 func get_nearby_structures(position: Vector2, radius: float) -> Array:
 	var found: Array = []
