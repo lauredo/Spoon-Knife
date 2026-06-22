@@ -18,6 +18,7 @@ var shake_amount: float = 0.0
 var bob_phase: float = 0.0
 
 var sprite: Sprite2D = null
+var _collision: CollisionShape2D = null  # disabled while depleted so you can walk over the stump
 var _sprite_base_pos: Vector2 = Vector2.ZERO
 var _display_h: float = 0.0
 
@@ -36,10 +37,10 @@ func _ready() -> void:
 		collision_layer |= 1
 	collision_mask = 0
 
-	var col := CollisionShape2D.new()
-	col.shape = _make_collision_shape()
-	col.position = _get_collision_offset()
-	add_child(col)
+	_collision = CollisionShape2D.new()
+	_collision.shape = _make_collision_shape()
+	_collision.position = _get_collision_offset()
+	add_child(_collision)
 
 	_setup_sprite()
 
@@ -181,6 +182,11 @@ func interact(player: Player) -> void:
 	if item_data and item_data.durability > 0:
 		player.inventory.use_durability(equipped_id, 1)
 
+## Harvest from a tool/weapon swing (the attack button). Trees/rocks/bushes are chopped this
+## way now; the tool check & damage live in interact(), so this just forwards to it.
+func chop(player: Player) -> void:
+	interact(player)
+
 func _take_hit(damage: float, player: Player) -> void:
 	health -= damage
 	shake_amount = 8.0
@@ -270,6 +276,9 @@ func _deplete() -> void:
 	regrow_timer = regrow_time
 	if sprite:
 		sprite.visible = false
+	# Drop the hitbox so the leftover stump/rubble can be walked over.
+	if _collision:
+		_collision.set_deferred("disabled", true)
 	depleted.emit(self)
 	queue_redraw()
 
@@ -278,6 +287,8 @@ func _regrow() -> void:
 	health = max_health
 	if sprite:
 		sprite.visible = true
+	if _collision:
+		_collision.set_deferred("disabled", false)
 	queue_redraw()
 
 func _draw() -> void:

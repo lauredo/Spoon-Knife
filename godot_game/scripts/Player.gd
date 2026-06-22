@@ -32,6 +32,9 @@ var walk_cycle: float = 0.0
 var hit_flash: float = 0.0
 
 var sprite: AnimatedSprite2D = null
+var axe_sprite: Sprite2D = null      # held tool/weapon overlay in the raccoon's paw
+var axe_swing: float = 0.0           # 1->0 chop arc while attacking
+var _axe_item_id: String = ""        # cached id so we only reload the texture on change
 
 func _ready() -> void:
 	stats = PlayerStats.new()
@@ -82,6 +85,16 @@ func _ready() -> void:
 	inventory.item_equipped.connect(_on_item_equipped)
 	_setup_sprite()
 
+	# Held-tool overlay (axe/pickaxe/etc.) drawn in the raccoon's paw; positioned each frame.
+	axe_sprite = Sprite2D.new()
+	axe_sprite.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	axe_sprite.visible = false
+	add_child(axe_sprite)
+
+	# Start with an axe equipped so the player can chop trees from the get-go (still craftable).
+	inventory.add_item("axe", 1)
+	inventory.equip_slot(0)
+
 func _setup_sprite() -> void:
 	# Isometric raccoon: SE/SW/NE provided; NW is NE mirrored. Attack only SE/SW.
 	var sf := Assets.sprite_frames("player", [
@@ -130,12 +143,48 @@ func _update_sprite() -> void:
 	else:
 		sprite.modulate = Color.WHITE
 
+## Place the held tool/weapon in the paw: visible only for TOOL/WEAPON, mirrored with the
+## raccoon's facing, behind the body on the back view, and swinging during an attack.
+func _update_axe() -> void:
+	if axe_sprite == null:
+		return
+	var equipped_id := inventory.get_equipped_item()
+	var item_data = ItemDatabase.get_item(equipped_id) if equipped_id != "" else null
+	var show_tool: bool = item_data != null and (item_data.type == ItemDatabase.ItemType.TOOL or item_data.type == ItemDatabase.ItemType.WEAPON)
+	axe_sprite.visible = show_tool
+	if not show_tool:
+		return
+
+	if _axe_item_id != equipped_id:
+		_axe_item_id = equipped_id
+		var icon := Assets.item_icon(equipped_id)
+		axe_sprite.texture = icon
+		if icon:
+			var hs := 30.0 / float(icon.get_height())
+			axe_sprite.scale = Vector2(hs, hs)
+
+	# Mirror the raccoon's facing (same rule as _update_sprite).
+	var going_up := facing.y < 0.0 and absf(facing.y) > absf(facing.x)
+	var side := -1.0 if facing.x < 0.0 else 1.0
+	axe_sprite.flip_h = facing.x < 0.0
+	if going_up:
+		axe_sprite.position = Vector2(side * 12.0, -12.0)
+		axe_sprite.z_index = -1  # tucked behind the raccoon's back
+	else:
+		axe_sprite.position = Vector2(side * 15.0, -2.0)
+		axe_sprite.z_index = 1   # in front of the body
+
+	# Held diagonally; a chop arc adds on top while attacking (axe_swing 1->0).
+	var swing := sin(axe_swing * PI) * 1.4
+	axe_sprite.rotation = side * (0.45 + swing)
+
 func _physics_process(delta: float) -> void:
 	_handle_timers(delta)
 	_handle_input(delta)
 	_handle_movement(delta)
 	_check_light()
 	_update_sprite()
+	_update_axe()
 	queue_redraw()
 
 func _handle_timers(delta: float) -> void:
@@ -145,6 +194,8 @@ func _handle_timers(delta: float) -> void:
 		dodge_cooldown -= delta
 	if hit_flash > 0.0:
 		hit_flash -= delta * 4.0
+	if axe_swing > 0.0:
+		axe_swing = maxf(0.0, axe_swing - delta * 5.0)  # ~0.2s chop arc
 	if is_dodging:
 		dodge_timer -= delta
 		if dodge_timer <= 0.0:
@@ -192,6 +243,7 @@ func _start_dodge() -> void:
 func _perform_attack() -> void:
 	attack_timer = ATTACK_COOLDOWN
 	is_attacking = true
+	axe_swing = 1.0  # kick off the held-tool chop arc
 
 	var equipped_id := inventory.get_equipped_item()
 	var item_data = ItemDatabase.get_item(equipped_id) if equipped_id != "" else null
@@ -214,6 +266,15 @@ func _perform_attack() -> void:
 			if item_data and item_data.durability > 0:
 				inventory.use_durability(equipped_id, 1)
 
+	# Chop / mine / gather resource nodes in front: trees (axe), rocks (pickaxe), bushes. The
+	# tool requirement & durability are handled inside the node. Grass is interact-only.
+	query.collision_mask = 8  # resources layer
+	var res_hits := space.intersect_shape(query, 8)
+	for res in res_hits:
+		var node := res.collider as ResourceNode
+		if node != null and node.resource_type != ResourceNode.ResourceType.GRASS_TUFT:
+			node.chop(self)
+
 	await get_tree().create_timer(0.18).timeout
 	is_attacking = false
 	queue_redraw()
@@ -221,15 +282,20 @@ func _perform_attack() -> void:
 func _try_interact() -> void:
 	if nearby_interactables.is_empty():
 		return
-	# Find closest interactable
+	# Interact (E) only PICKS grass tufts from the ground and operates structures (chest, campfire).
+	# Trees, rocks and bushes are harvested with the attack button now.
 	var closest: Node = null
 	var closest_dist := INF
 	for obj in nearby_interactables:
-		if is_instance_valid(obj):
-			var d := global_position.distance_to(obj.global_position)
-			if d < closest_dist:
-				closest_dist = d
-				closest = obj
+		if not is_instance_valid(obj):
+			continue
+		var rn := obj as ResourceNode
+		if rn != null and rn.resource_type != ResourceNode.ResourceType.GRASS_TUFT:
+			continue  # harvested via attack, not interact
+		var d := global_position.distance_to(obj.global_position)
+		if d < closest_dist:
+			closest_dist = d
+			closest = obj
 	if closest and closest.has_method("interact"):
 		closest.interact(self)
 
@@ -267,6 +333,16 @@ func _on_died() -> void:
 func _on_item_equipped(item_id: String) -> void:
 	queue_redraw()
 
+## Eat a food item from the inventory: applies its restores (hunger/health/sanity) and
+## consumes one. Returns false if it isn't food or the player doesn't have it.
+func eat_item(item_id: String) -> bool:
+	if not inventory.has_item(item_id):
+		return false
+	if not stats.eat(item_id):
+		return false
+	inventory.remove_item(item_id, 1)
+	return true
+
 func get_attack_damage() -> int:
 	var equipped_id := inventory.get_equipped_item()
 	var item_data = ItemDatabase.get_item(equipped_id) if equipped_id != "" else null
@@ -302,18 +378,7 @@ func _draw() -> void:
 		draw_circle(eye_offset + facing * 1.5, 1.5, Color(0.1, 0.1, 0.2))
 		draw_circle(eye_offset + Vector2(8, 0) + facing * 1.5, 1.5, Color(0.1, 0.1, 0.2))
 
-	# Equipped item indicator
-	var equipped_id := inventory.get_equipped_item()
-	if equipped_id != "":
-		var hand_pos := facing * 22.0 + Vector2(14, 0).rotated(atan2(facing.y, facing.x))
-		var icon := Assets.item_icon(equipped_id)
-		if icon:
-			var sz := Vector2(20, 20)
-			draw_texture_rect(icon, Rect2(hand_pos - sz * 0.5, sz), false)
-		else:
-			var item_data = ItemDatabase.get_item(equipped_id)
-			if item_data:
-				draw_circle(hand_pos, 6, item_data.color)
+	# (Equipped tool/weapon is now a real Sprite2D overlay in the paw — see _update_axe.)
 
 	# Attack arc
 	if is_attacking:
