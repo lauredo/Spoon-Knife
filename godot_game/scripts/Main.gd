@@ -105,6 +105,11 @@ func _generate_world() -> void:
 	world_gen.setup(world, day_night)
 	world_gen.generate()
 
+	# Sanity-driven terror creatures (the horror hook): spawn near the player while sanity is low.
+	var shadow_spawner := ShadowSpawner.new()
+	shadow_spawner.name = "ShadowSpawner"
+	world.add_child(shadow_spawner)
+
 func _setup_hud() -> void:
 	hud_layer.setup(player, day_night)
 	crafting_menu.setup(player)
