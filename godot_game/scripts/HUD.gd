@@ -176,6 +176,8 @@ func setup(p: Player, dnc: DayNightCycle) -> void:
 		day_night.time_updated.connect(_on_time_updated)
 		day_night.phase_changed.connect(_on_phase_changed)
 
+	_update_hotbar()  # render any starting items (e.g. the axe) right away
+
 func _process(delta: float) -> void:
 	# Notification fade
 	if notification_timer > 0.0:
@@ -242,16 +244,21 @@ func _update_slot(i: int) -> void:
 	if not item_data:
 		return
 
-	# Item icon (fallback to color swatch when no sprite exists)
+	# Item icon (fallback to color swatch when no sprite exists). Size via anchors so a large
+	# (256px) icon texture can't override the rect and overflow the slot.
 	var icon := Assets.item_icon(item_id)
 	if icon:
 		var tr := TextureRect.new()
-		tr.texture = icon
-		tr.size = Vector2(36, 36)
-		tr.position = Vector2(6, 7)
 		tr.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 		tr.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+		tr.texture = icon
+		tr.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		slot.add_child(tr)
+		tr.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+		tr.offset_left = 6
+		tr.offset_top = 6
+		tr.offset_right = -6
+		tr.offset_bottom = -6
 	else:
 		var swatch := ColorRect.new()
 		swatch.color = item_data.color
