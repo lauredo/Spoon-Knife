@@ -1,6 +1,6 @@
 extends Node
 
-enum ItemType { RESOURCE, TOOL, FOOD, STRUCTURE, WEAPON, ARMOR }
+enum ItemType { RESOURCE, TOOL, FOOD, STRUCTURE, WEAPON, ARMOR, MEDICINE }
 
 class ItemData:
 	var id: String
@@ -71,6 +71,10 @@ func _register_all_items() -> void:
 	cooked_meat.hunger_restore = 25.0
 	cooked_meat.health_restore = 3.0
 	cooked_meat.sanity_restore = 5.0
+
+	# === MEDICINE ===
+	var bandage = _reg("bandage", "Bandagem", ItemType.MEDICINE, 20, Color(0.95, 0.95, 0.9))
+	bandage.health_restore = 40.0
 
 	# === TOOLS ===
 	var axe = _reg("axe", "Axe", ItemType.TOOL, 1, Color(0.72, 0.72, 0.82))

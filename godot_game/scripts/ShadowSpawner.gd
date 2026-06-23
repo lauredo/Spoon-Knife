@@ -13,7 +13,8 @@ func _process(delta: float) -> void:
 	var p = GameManager.player
 	if p == null or not is_instance_valid(p) or p.stats == null:
 		return
-	if GameManager.is_game_over or not p.stats.is_low_sanity():
+	# Shadows are a NIGHT terror: they only emerge in the dark hours (dusk/night), never in daylight.
+	if GameManager.is_game_over or p.stats.is_day or not p.stats.is_low_sanity():
 		_timer = 0.0
 		return
 

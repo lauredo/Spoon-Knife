@@ -1,10 +1,11 @@
 extends Node2D
 
 @onready var world: Node2D = $World
-@onready var darkness_overlay: ColorRect = $DarknessLayer/DarknessOverlay
+@onready var world_darkness: CanvasModulate = $WorldDarkness
 @onready var hud_layer: HUD = $HUDLayer
 @onready var crafting_menu: CraftingMenu = $CraftingMenu
 @onready var backpack_menu: BackpackMenu = $BackpackMenu
+@onready var chest_menu: ChestMenu = $ChestMenu
 @onready var background: ColorRect = $Background
 
 var player: Player
@@ -75,7 +76,7 @@ func _setup_day_night() -> void:
 	day_night = DayNightCycle.new()
 	day_night.name = "DayNightCycle"
 	add_child(day_night)
-	day_night.setup(darkness_overlay)
+	day_night.setup(world_darkness)
 
 func _spawn_player() -> void:
 	player = Player.new()
@@ -115,7 +116,9 @@ func _setup_hud() -> void:
 	hud_layer.setup(player, day_night)
 	crafting_menu.setup(player)
 	backpack_menu.setup(player)
+	chest_menu.setup(player)
 	GameManager.register_hud(hud_layer)
+	GameManager.register_menus(crafting_menu, backpack_menu, chest_menu)
 
 func _connect_signals() -> void:
 	GameManager.game_over.connect(_on_game_over)

@@ -67,6 +67,10 @@ func _spawn_preview() -> void:
 	_preview_icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 	_preview_icon.texture = icon
 	_preview_icon.size = Vector2(44, 44)
+	# The preview follows the cursor, so it sits directly under the mouse. Without this it would
+	# intercept the drag hit-test (TextureRect defaults to MOUSE_FILTER_PASS) and every drop target
+	# showed the "forbidden" cursor. IGNORE makes the drop fall through to the real slot below.
+	_preview_icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_preview_icon.modulate = Color(1, 1, 1, 0.9)
 	_preview_icon.position = get_viewport().get_mouse_position() - Vector2(22, 22)
 	_preview.add_child(_preview_icon)

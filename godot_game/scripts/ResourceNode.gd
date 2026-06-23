@@ -22,11 +22,6 @@ var _collision: CollisionShape2D = null  # disabled while depleted so you can wa
 var _sprite_base_pos: Vector2 = Vector2.ZERO
 var _display_h: float = 0.0
 
-# Hit-feedback shader: lerps the sprite toward `flash_color` by `flash` (0..1) while keeping
-# its original alpha, so we can pop a solid-colour silhouette. Shared across all nodes.
-const _HIT_SHADER_CODE: String = "shader_type canvas_item;\nuniform float flash : hint_range(0.0, 1.0) = 0.0;\nuniform vec4 flash_color : source_color = vec4(1.0);\nvoid fragment() {\n\tvec4 base = COLOR;\n\tvec4 tex = texture(TEXTURE, UV);\n\tvec3 rgb = mix(tex.rgb, flash_color.rgb, flash);\n\tCOLOR = vec4(rgb * base.rgb, tex.a * base.a);\n}\n"
-static var _hit_shader: Shader = null
-
 func _ready() -> void:
 	_setup_type()
 	# Layer 8 = Resources (used by the player's interact area). Trees and rocks ALSO
@@ -59,7 +54,7 @@ func _setup_sprite() -> void:
 	sprite.position = _sprite_base_pos
 	# Shader material so we can flash the sprite white on hit (flash=0 = passthrough).
 	var flash_mat := ShaderMaterial.new()
-	flash_mat.shader = _get_hit_shader()
+	flash_mat.shader = Assets.hit_shader()
 	flash_mat.set_shader_parameter("flash", 0.0)
 	sprite.material = flash_mat
 	add_child(sprite)
@@ -147,14 +142,8 @@ func _process(delta: float) -> void:
 	shake_amount = max(0.0, shake_amount - delta * 9.0)
 	bob_phase += delta * 1.2
 	if sprite and not is_depleted:
-		# Trees stay planted — their hit feedback is a flash + silhouette (_flash_silhouette).
-		# Rocks/bushes still do a small position jitter on hit that decays back to 0.
-		if resource_type != ResourceType.TREE and shake_amount > 0.0:
-			sprite.position = _sprite_base_pos + Vector2(
-				randf_range(-shake_amount, shake_amount),
-				randf_range(-shake_amount * 0.5, shake_amount * 0.5))
-		else:
-			sprite.position = _sprite_base_pos
+		# Every resource stays planted now — hit feedback is the flash + silhouette, no tremble.
+		sprite.position = _sprite_base_pos
 	if is_depleted:
 		regrow_timer -= delta
 		if regrow_timer <= 0.0:
@@ -190,9 +179,9 @@ func chop(player: Player) -> void:
 func _take_hit(damage: float, player: Player) -> void:
 	health -= damage
 	shake_amount = 8.0
+	_flash_silhouette()  # white flash + silhouette pop for tree/rock/bush alike
 	if resource_type == ResourceType.TREE:
-		_spawn_hit_effect()
-		_flash_silhouette()
+		_spawn_hit_effect()  # drifting leaves are tree-only
 	queue_redraw()
 	if health <= 0.0:
 		_harvest(player)
@@ -227,8 +216,8 @@ func _spawn_hit_effect() -> void:
 		tw.set_parallel(false)
 		tw.tween_callback(leaf.queue_free)
 
-## Hit feedback (TREE): a quick white flash on the tree plus a solid-white silhouette that
-## pops out of it and fades — replaces the old canopy-shake (see [[sprite-pipeline]]).
+## Hit feedback: a quick white flash on the sprite plus a solid-white silhouette that pops out
+## and fades. Used for every resource that has a sprite (tree/rock/bush); no-ops for grass.
 func _flash_silhouette() -> void:
 	if sprite == null:
 		return
@@ -246,7 +235,7 @@ func _flash_silhouette() -> void:
 	ghost.z_index = 6
 	ghost.modulate = Color(1.0, 1.0, 1.0, 0.85)
 	var gmat := ShaderMaterial.new()
-	gmat.shader = _get_hit_shader()
+	gmat.shader = Assets.hit_shader()
 	gmat.set_shader_parameter("flash", 1.0)  # full silhouette
 	ghost.material = gmat
 	add_child(ghost)
@@ -256,12 +245,6 @@ func _flash_silhouette() -> void:
 	tw.tween_property(ghost, "modulate:a", 0.0, 0.18).set_ease(Tween.EASE_OUT)
 	tw.set_parallel(false)
 	tw.tween_callback(ghost.queue_free)
-
-static func _get_hit_shader() -> Shader:
-	if _hit_shader == null:
-		_hit_shader = Shader.new()
-		_hit_shader.code = _HIT_SHADER_CODE
-	return _hit_shader
 
 func _harvest(player: Player) -> void:
 	for drop_info in drops:

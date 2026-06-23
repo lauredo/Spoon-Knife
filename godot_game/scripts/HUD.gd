@@ -93,8 +93,10 @@ func _build_ui() -> void:
 		slot.position = Vector2(4 + i * 52, 6)
 		hotbar_panel.add_child(slot)
 		hotbar_slots.append(slot)
+		slot.gui_input.connect(_on_hotbar_slot_input.bind(i))
 
 		var num_label := Label.new()
+		num_label.name = "SlotNumber"  # identified by name so _update_slot never clears it
 		num_label.text = str(i + 1)
 		num_label.position = Vector2(2, 0)
 		num_label.add_theme_font_size_override("font_size", 9)
@@ -180,6 +182,9 @@ func setup(p: Player, dnc: DayNightCycle) -> void:
 		player.stats.hunger_changed.connect(_on_hunger_changed)
 		player.stats.sanity_changed.connect(_on_sanity_changed)
 		player.inventory.inventory_changed.connect(_update_hotbar)
+		# Selecting a slot (number keys / F cycle) only emits item_equipped, so refresh the
+		# highlight on that too — otherwise the selector visually sticks to the old slot.
+		player.inventory.item_equipped.connect(_update_hotbar.unbind(1))
 
 	if day_night:
 		day_night.time_updated.connect(_on_time_updated)
@@ -199,7 +204,7 @@ func _process(delta: float) -> void:
 	# Insanity effect
 	if player and player.stats.is_low_sanity():
 		insanity_phase += delta * 2.0
-		var intensity := 1.0 - player.stats.get_sanity_pct() / 0.3
+		var intensity := player.stats.get_insanity_intensity()
 		insanity_overlay.color.a = sin(insanity_phase) * 0.08 * intensity
 	else:
 		insanity_overlay.color.a = 0.0
@@ -241,12 +246,13 @@ func _update_slot(i: int) -> void:
 	var slot: InventorySlot = hotbar_slots[i]
 	slot.inv = player.inventory
 	slot.item_id = player.inventory.hotbar[i] if i < player.inventory.hotbar.size() else ""
-	# Remove old item visuals (keep the number label)
+	slot.tooltip_text = ""
+	# Remove old item visuals (icon + count), keeping only the persistent slot-number label.
+	# (Was keyed off text length, which wrongly kept single-digit count labels → ghost numbers.)
 	for child in slot.get_children():
-		if child is Label and child.text.length() <= 1:
-			continue  # keep number label
-		if child is ColorRect or child is TextureRect or (child is Label and child.text.length() > 1):
-			child.queue_free()
+		if child.name == "SlotNumber":
+			continue
+		child.queue_free()
 
 	var item_id: String = player.inventory.hotbar[i] if i < player.inventory.hotbar.size() else ""
 	var is_equipped := i == player.inventory.equipped_slot
@@ -260,6 +266,7 @@ func _update_slot(i: int) -> void:
 	var item_data = ItemDatabase.get_item(item_id)
 	if not item_data:
 		return
+	slot.tooltip_text = item_data.display_name
 
 	# Item icon (fallback to color swatch when no sprite exists). Size via anchors so a large
 	# (256px) icon texture can't override the rect and overflow the slot.
@@ -292,6 +299,32 @@ func _update_slot(i: int) -> void:
 		cnt_lbl.add_theme_font_size_override("font_size", 10)
 		cnt_lbl.add_theme_color_override("font_color", Color.WHITE)
 		slot.add_child(cnt_lbl)
+
+## Hotbar slot interaction (acts on RELEASE so press-and-drag still works):
+##   left-click  -> use it if it's a consumable (food/medicine), otherwise select the slot
+##   right-click -> drop one of that item on the ground
+func _on_hotbar_slot_input(event: InputEvent, index: int) -> void:
+	if not (event is InputEventMouseButton) or event.pressed or not player:
+		return
+	var id: String = player.inventory.hotbar[index] if index < player.inventory.hotbar.size() else ""
+	if event.button_index == MOUSE_BUTTON_LEFT:
+		if id == "":
+			player.inventory.equip_slot(index)
+			return
+		var item_data = ItemDatabase.get_item(id)
+		if item_data and (item_data.type == ItemDatabase.ItemType.FOOD or item_data.type == ItemDatabase.ItemType.MEDICINE):
+			player.eat_item(id)
+		else:
+			player.inventory.equip_slot(index)
+	elif event.button_index == MOUSE_BUTTON_RIGHT and id != "":
+		_drop_one(id)
+
+## Drop one of an item type on the ground next to the player.
+func _drop_one(item_id: String) -> void:
+	if not player or not player.inventory.has_item(item_id):
+		return
+	if player.inventory.remove_item(item_id, 1):
+		GameManager.spawn_drop(player.global_position, item_id, 1)
 
 func show_notification(text: String, duration: float = 2.5) -> void:
 	notification_label.text = text

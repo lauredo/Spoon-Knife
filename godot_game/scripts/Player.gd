@@ -35,6 +35,7 @@ var hit_flash: float = 0.0
 
 var sprite: AnimatedSprite2D = null
 var axe_sprite: Sprite2D = null      # held tool/weapon overlay in the raccoon's paw
+var torch_light: PointLight2D = null # glow around the raccoon while a light source is equipped
 var axe_swing: float = 0.0           # 1->0 chop arc while attacking
 var _axe_item_id: String = ""        # cached id so we only reload the texture on change
 
@@ -92,6 +93,15 @@ func _ready() -> void:
 	axe_sprite.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 	axe_sprite.visible = false
 	add_child(axe_sprite)
+
+	# Torch glow: lights the area around the raccoon when a torch/light source is equipped.
+	torch_light = PointLight2D.new()
+	torch_light.texture = Assets.light_texture()
+	torch_light.texture_scale = 175.0 / 128.0
+	torch_light.color = Color(1.0, 0.82, 0.5)
+	torch_light.energy = 1.0
+	torch_light.enabled = false
+	add_child(torch_light)
 
 	# Start with an axe equipped so the player can chop trees from the get-go (still craftable).
 	inventory.add_item("axe", 1)
@@ -205,7 +215,11 @@ func _handle_timers(delta: float) -> void:
 			stats.invincible = false
 
 func _handle_input(delta: float) -> void:
-	if Input.is_action_just_pressed("attack") and attack_timer <= 0.0 and not is_dodging:
+	# A left-click that lands on UI (an open menu, or the always-visible hotbar) is moving/
+	# selecting items, not attacking — so don't swing when a menu is open or the cursor is over
+	# any HUD control. (The world Background is MOUSE_FILTER_IGNORE, so world clicks still attack.)
+	var blocked_by_ui: bool = GameManager.is_menu_open() or get_viewport().gui_get_hovered_control() != null
+	if Input.is_action_just_pressed("attack") and attack_timer <= 0.0 and not is_dodging and not blocked_by_ui:
 		_perform_attack()
 	if Input.is_action_just_pressed("dodge") and dodge_cooldown <= 0.0 and not is_dodging:
 		_start_dodge()
@@ -333,6 +347,8 @@ func _check_light() -> void:
 		if item_data and item_data.is_light_source:
 			has_torch_equipped = true
 	stats.set_in_light(near_light or has_torch_equipped)
+	if torch_light:
+		torch_light.enabled = has_torch_equipped
 
 func set_near_light(value: bool) -> void:
 	near_light = value

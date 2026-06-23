@@ -50,6 +50,7 @@ func _icon(id: String, type: int, color: Color) -> String:
 		"torch": inner = _torch()
 		"campfire": inner = _campfire()
 		"chest": inner = _box(c, d, l)
+		"bandage": inner = _bandage()
 		_:
 			match type:
 				1: inner = _tool(c, d)        # TOOL
@@ -94,6 +95,9 @@ func _box(c: String, d: String, l: String) -> String:
 
 func _torch() -> String:
 	return '<rect x="29" y="28" width="6" height="28" rx="3" fill="#7a5230"/><path d="M32 8 q11 10 5 21 q-2 7 -10 4 q-9 -3 -4 -13 q3 -7 9 -12 z" fill="#ff9a2e"/><path d="M32 17 q5 6 1 14 q-4 3 -7 -2 q-2 -5 6 -12 z" fill="#ffd24a"/>'
+
+func _bandage() -> String:
+	return '<g transform="rotate(-40 32 32)"><rect x="7" y="22" width="50" height="20" rx="10" fill="#e9c79b" stroke="#b5854e" stroke-width="2.5"/><rect x="22" y="25" width="20" height="14" rx="3" fill="#f7edd9" stroke="#d2b485" stroke-width="1.5"/><rect x="30.5" y="28" width="3" height="8" rx="1.2" fill="#d8453d"/><rect x="28" y="30.5" width="8" height="3" rx="1.2" fill="#d8453d"/><g fill="#b5854e"><circle cx="13" cy="28" r="1.4"/><circle cx="13" cy="36" r="1.4"/><circle cx="17.5" cy="28" r="1.4"/><circle cx="17.5" cy="36" r="1.4"/><circle cx="46.5" cy="28" r="1.4"/><circle cx="46.5" cy="36" r="1.4"/><circle cx="51" cy="28" r="1.4"/><circle cx="51" cy="36" r="1.4"/></g></g>'
 
 func _campfire() -> String:
 	return '<g stroke="#5c3818" stroke-width="6" stroke-linecap="round"><line x1="16" y1="49" x2="48" y2="45"/><line x1="16" y1="45" x2="48" y2="49"/></g><path d="M32 12 q12 12 5 25 q-2 7 -10 5 q-9 -3 -4 -14 q3 -8 9 -16 z" fill="#ff7a1e"/><path d="M32 21 q6 7 2 16 q-4 3 -8 -2 q-3 -6 6 -14 z" fill="#ffd24a"/>'

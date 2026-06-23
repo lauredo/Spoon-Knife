@@ -14,6 +14,37 @@ const SPRITES_DIR := "res://assets/sprites/"
 
 var _tex_cache: Dictionary = {}
 var _frames_cache: Dictionary = {}
+var _light_tex: GradientTexture2D = null
+var _hit_shader: Shader = null
+
+# Shared "hit flash" canvas_item shader: lerps a sprite toward `flash_color` by the `flash`
+# uniform (0..1) while keeping its alpha — used for the white flash + solid-silhouette pop that
+# plays when a tree/rock/bush/mob is struck. One Shader instance, reused by every hit effect.
+const _HIT_SHADER_CODE: String = "shader_type canvas_item;\nuniform float flash : hint_range(0.0, 1.0) = 0.0;\nuniform vec4 flash_color : source_color = vec4(1.0);\nvoid fragment() {\n\tvec4 base = COLOR;\n\tvec4 tex = texture(TEXTURE, UV);\n\tvec3 rgb = mix(tex.rgb, flash_color.rgb, flash);\n\tCOLOR = vec4(rgb * base.rgb, tex.a * base.a);\n}\n"
+
+func hit_shader() -> Shader:
+	if _hit_shader == null:
+		_hit_shader = Shader.new()
+		_hit_shader.code = _HIT_SHADER_CODE
+	return _hit_shader
+
+## A soft radial light mask (white opaque centre → transparent edge) for PointLight2D, built once
+## and cached. At texture_scale 1 the lit radius is ~128 px; scale it up per light source.
+func light_texture() -> GradientTexture2D:
+	if _light_tex != null:
+		return _light_tex
+	var grad := Gradient.new()
+	grad.set_color(0, Color(1, 1, 1, 1))
+	grad.set_color(1, Color(1, 1, 1, 0))
+	var tex := GradientTexture2D.new()
+	tex.gradient = grad
+	tex.width = 256
+	tex.height = 256
+	tex.fill = GradientTexture2D.FILL_RADIAL
+	tex.fill_from = Vector2(0.5, 0.5)
+	tex.fill_to = Vector2(1.0, 0.5)
+	_light_tex = tex
+	return tex
 
 ## Generic, exists-checked, cached texture load. Returns null if absent.
 func texture(path: String) -> Texture2D:

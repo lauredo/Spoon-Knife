@@ -27,6 +27,7 @@ func _register_recipes() -> void:
 	_add("pickaxe", "pickaxe", 1, {"twig": 2, "flint": 2}, "", "tools")
 	_add("torch", "torch", 1, {"twig": 2, "grass": 2}, "", "light")
 	_add("rope", "rope", 1, {"grass": 3}, "", "refine")
+	_add("bandage", "bandage", 1, {"grass": 3, "twig": 1}, "", "healing")
 	_add("campfire", "campfire", 1, {"wood": 2, "grass": 2, "twig": 2}, "", "structures")
 	_add("spear", "spear", 1, {"twig": 2, "flint": 1, "rope": 1}, "", "weapons")
 

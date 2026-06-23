@@ -219,6 +219,7 @@ func take_damage(amount: float, attacker: Node = null) -> void:
 		return
 	health -= amount
 	hit_flash = 1.0
+	_flash_silhouette()
 	queue_redraw()
 	if attacker is Player:
 		target = attacker
@@ -226,6 +227,34 @@ func take_damage(amount: float, attacker: Node = null) -> void:
 			_on_aggro(attacker)
 	if health <= 0.0:
 		_die()
+
+## Hit feedback: a solid-white silhouette of the current sprite frame pops out and fades —
+## same effect as struck resources. Sprite-based mobs (boar/spider) only; procedural mobs
+## (shadow/boss placeholders) keep their white `hit_flash` tint from `_draw_mob`.
+func _flash_silhouette() -> void:
+	if sprite == null or sprite.sprite_frames == null:
+		return
+	var frame_tex: Texture2D = sprite.sprite_frames.get_frame_texture(sprite.animation, sprite.frame)
+	if frame_tex == null:
+		return
+	var ghost := Sprite2D.new()
+	ghost.texture = frame_tex
+	ghost.scale = sprite.scale
+	ghost.flip_h = sprite.flip_h
+	ghost.position = sprite.position
+	ghost.z_index = 6
+	ghost.modulate = Color(1.0, 1.0, 1.0, 0.85)
+	var gmat := ShaderMaterial.new()
+	gmat.shader = Assets.hit_shader()
+	gmat.set_shader_parameter("flash", 1.0)  # full white silhouette
+	ghost.material = gmat
+	add_child(ghost)
+	var tw := create_tween()
+	tw.set_parallel(true)
+	tw.tween_property(ghost, "scale", sprite.scale * 1.18, 0.18).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+	tw.tween_property(ghost, "modulate:a", 0.0, 0.18).set_ease(Tween.EASE_OUT)
+	tw.set_parallel(false)
+	tw.tween_callback(ghost.queue_free)
 
 func _die() -> void:
 	is_dead = true

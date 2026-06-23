@@ -55,7 +55,7 @@ func _build_ui() -> void:
 	panel.add_child(title)
 
 	var hint := Label.new()
-	hint.text = "click: equip/eat  |  drag: move to/from hotbar"
+	hint.text = "clique: usar/equipar  |  direito: soltar  |  arraste: hotbar"
 	hint.position = Vector2(108, 17)
 	hint.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	hint.add_theme_font_size_override("font_size", 10)
@@ -153,9 +153,14 @@ func _make_slot(item_id: String) -> Control:
 	slot.inv = player.inventory
 	slot.size = Vector2(SLOT, SLOT)
 	slot.clip_contents = true  # never let an oversized icon spill past the slot frame
-	var is_food: bool = item_data != null and item_data.type == ItemDatabase.ItemType.FOOD
 	var label_name: String = item_data.display_name if item_data else item_id
-	slot.tooltip_text = ("Comer " + label_name) if is_food else label_name
+	var item_type: int = item_data.type if item_data else -1
+	if item_type == ItemDatabase.ItemType.FOOD:
+		slot.tooltip_text = "Comer " + label_name
+	elif item_type == ItemDatabase.ItemType.MEDICINE:
+		slot.tooltip_text = "Usar " + label_name
+	else:
+		slot.tooltip_text = label_name
 
 	var slot_style := StyleBoxFlat.new()
 	slot_style.bg_color = Color(0.12, 0.12, 0.12, 0.9)
@@ -211,13 +216,18 @@ func _on_slot_gui_input(event: InputEvent, item_id: String) -> void:
 	# Act on RELEASE, not press: acting on press would equip + rebuild the grid the instant you
 	# press to start a drag, killing the drag. On release, a plain click still equips/eats, while
 	# press-and-move lets the drag-and-drop start (InventorySlot._get_drag_data).
-	if event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT and not event.pressed:
-		if not player:
-			return
-		# Food is eaten on click; everything else is equipped.
+	if not (event is InputEventMouseButton) or event.pressed or not player:
+		return
+	if event.button_index == MOUSE_BUTTON_LEFT:
+		# Food/medicine is consumed on click; everything else is equipped onto the hotbar.
 		var item_data = ItemDatabase.get_item(item_id)
-		if item_data and item_data.type == ItemDatabase.ItemType.FOOD:
+		if item_data and (item_data.type == ItemDatabase.ItemType.FOOD or item_data.type == ItemDatabase.ItemType.MEDICINE):
 			player.eat_item(item_id)
 		else:
 			player.inventory.equip_item(item_id)
+		_refresh()
+	elif event.button_index == MOUSE_BUTTON_RIGHT:
+		# Drop one on the ground.
+		if player.inventory.remove_item(item_id, 1):
+			GameManager.spawn_drop(player.global_position, item_id, 1)
 		_refresh()

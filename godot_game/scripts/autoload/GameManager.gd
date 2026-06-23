@@ -10,6 +10,9 @@ var is_won: bool = false
 var player: Node = null
 var world: Node = null
 var hud: Node = null
+var crafting_menu: Node = null
+var backpack_menu: Node = null
+var chest_menu: Node = null
 
 func _ready() -> void:
 	pass
@@ -22,6 +25,19 @@ func register_world(w: Node) -> void:
 
 func register_hud(h: Node) -> void:
 	hud = h
+
+func register_menus(crafting: Node, backpack: Node, chest: Node) -> void:
+	crafting_menu = crafting
+	backpack_menu = backpack
+	chest_menu = chest
+
+## True while any inventory-style menu is open — gameplay clicks (attack) are suppressed so
+## clicking UI slots doesn't also swing the tool.
+func is_menu_open() -> bool:
+	for m in [crafting_menu, backpack_menu, chest_menu]:
+		if m != null and m.is_open:
+			return true
+	return false
 
 func trigger_game_over() -> void:
 	if is_game_over:

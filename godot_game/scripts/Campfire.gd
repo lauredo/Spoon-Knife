@@ -9,6 +9,7 @@ var nearby_players: Array = []
 
 var base_sprite: Sprite2D = null
 var flame: AnimatedSprite2D = null
+var light: PointLight2D = null
 
 signal fire_extinguished
 
@@ -35,6 +36,15 @@ func _ready() -> void:
 	add_child(light_area)
 	light_area.body_entered.connect(_on_player_entered_light)
 	light_area.body_exited.connect(_on_player_exited_light)
+
+	# Real illumination: a warm PointLight2D that brightens the world (darkened by the night
+	# CanvasModulate) around the fire. Sized to match the sanity-safe light_area radius.
+	light = PointLight2D.new()
+	light.texture = Assets.light_texture()
+	light.texture_scale = light_radius / 128.0
+	light.color = Color(1.0, 0.78, 0.45)
+	light.energy = 1.15
+	add_child(light)
 
 	_setup_sprites()
 
@@ -71,6 +81,10 @@ func _process(delta: float) -> void:
 			_extinguish()
 	if flame:
 		flame.visible = is_lit
+	if light:
+		light.enabled = is_lit
+		if is_lit:
+			light.energy = 1.05 + sin(fire_phase) * 0.12  # gentle flicker
 	queue_redraw()
 
 func _on_player_entered_light(body: Node) -> void:

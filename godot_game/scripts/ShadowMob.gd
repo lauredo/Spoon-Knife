@@ -29,9 +29,9 @@ func _base_modulate() -> Color:
 	return Color(0.12, 0.06, 0.18, 0.9)
 
 func _physics_process(delta: float) -> void:
-	# Only exist while the player's sanity is low — fade out once they recover.
+	# Only exist at night while the player's sanity is low — fade out at dawn or once they recover.
 	var p = GameManager.player
-	if not is_dead and p and is_instance_valid(p) and p.stats and not p.stats.is_low_sanity():
+	if not is_dead and p and is_instance_valid(p) and p.stats and (p.stats.is_day or not p.stats.is_low_sanity()):
 		_vanish()
 		return
 	super._physics_process(delta)

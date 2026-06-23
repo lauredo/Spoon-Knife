@@ -15,14 +15,14 @@ const DAWN_START := 0.92     # 92% = dawn
 var time_of_day: float = 0.1  # 0..1 range
 var current_phase: Phase = Phase.DAY
 var day_number: int = 1
-var overlay_node: ColorRect = null
+var modulate_node: CanvasModulate = null
 var spider_nodes: Array = []
 
 func _ready() -> void:
 	pass
 
-func setup(overlay: ColorRect) -> void:
-	overlay_node = overlay
+func setup(modulate: CanvasModulate) -> void:
+	modulate_node = modulate
 
 func _process(delta: float) -> void:
 	time_of_day += delta / CYCLE_DURATION
@@ -37,7 +37,7 @@ func _process(delta: float) -> void:
 		phase_changed.emit(_phase_name(), day_number)
 		_on_phase_change(new_phase)
 
-	_update_overlay()
+	_update_darkness()
 	time_updated.emit(time_of_day)
 
 func _calculate_phase() -> Phase:
@@ -67,19 +67,22 @@ func _on_phase_change(phase: Phase) -> void:
 		if is_instance_valid(spider) and spider.has_method("set_night_mode"):
 			spider.set_night_mode(is_night)
 
-func _update_overlay() -> void:
-	if not overlay_node:
+func _update_darkness() -> void:
+	if not modulate_node:
 		return
 
-	var darkness := _get_darkness_level()
-	var overlay_color := Color(0.0, 0.02, 0.08, darkness)
+	# Multiply the whole world toward a dark blue at night; campfire/torch PointLight2Ds add
+	# brightness back around them. (CanvasModulate darkens the world canvas, not the HUD layer.)
+	var d: float = _get_darkness_level() / 0.88   # 0 (day) .. 1 (deep night)
+	# Deep night is near-black with a faint cold tint, so only campfire/torch pools are readable.
+	var col: Color = Color.WHITE.lerp(Color(0.02, 0.03, 0.07), d)
 
-	# Add sanity distortion tint at very low sanity
+	# Sanity distortion: tint the world toward a sickly purple as sanity drops.
 	if GameManager.player and GameManager.player.stats.is_low_sanity():
-		var sanity_pct: float = GameManager.player.stats.get_sanity_pct()
-		overlay_color = overlay_color.lerp(Color(0.15, 0.0, 0.15, darkness + 0.1), 1.0 - sanity_pct * 3.0)
+		var k: float = GameManager.player.stats.get_insanity_intensity()
+		col = col.lerp(Color(0.30, 0.12, 0.32), k * 0.5)
 
-	overlay_node.color = overlay_color
+	modulate_node.color = col
 
 func _get_darkness_level() -> float:
 	if time_of_day < DUSK_START:

@@ -7,6 +7,13 @@ var attract_timer: float = 0.0
 var magnetize_to: Node = null
 var icon_sprite: Sprite2D = null
 
+# Vertical "toss" so loot pops out and LANDS with weight instead of gliding like a bubble.
+const HOP_GRAVITY := 1100.0
+var _hop_h: float = 0.0      # current height above rest (px)
+var _hop_v: float = 0.0      # vertical velocity (px/s, + = up)
+var _rest_y: float = 0.0     # icon's resting y
+var _landed: bool = true     # no hop until a sprite + initial pop is set
+
 func _ready() -> void:
 	collision_layer = 16
 	collision_mask = 1
@@ -18,10 +25,10 @@ func _ready() -> void:
 	add_child(col)
 
 	gravity_scale = 0.0
-	linear_damp = 2.0
+	linear_damp = 5.0  # higher = the scatter settles quickly instead of drifting (no floaty glide)
 
-	# Random initial velocity (scatter effect); damping settles it onto the ground.
-	linear_velocity = Vector2(randf_range(-60, 60), randf_range(-60, 60))
+	# Small ground scatter; damping settles it fast.
+	linear_velocity = Vector2(randf_range(-45, 45), randf_range(-45, 45))
 
 func setup(_item_id: String, _amount: int = 1) -> void:
 	item_id = _item_id
@@ -47,7 +54,26 @@ func _setup_icon() -> void:
 	icon_sprite.position = Vector2(0, 12.0 - target_h * 0.5)
 	add_child(icon_sprite)
 
+	# Kick off the toss: pop up, then fall under gravity and settle with a tiny bounce.
+	_rest_y = icon_sprite.position.y
+	_hop_h = 0.0
+	_hop_v = randf_range(150.0, 210.0)
+	_landed = false
+
 func _process(delta: float) -> void:
+	# Vertical toss/land animation (purely visual; the body only moves horizontally).
+	if not _landed and icon_sprite != null:
+		_hop_v -= HOP_GRAVITY * delta
+		_hop_h += _hop_v * delta
+		if _hop_h <= 0.0:
+			_hop_h = 0.0
+			if _hop_v < -55.0:
+				_hop_v = -_hop_v * 0.32  # one small bounce
+			else:
+				_hop_v = 0.0
+				_landed = true
+		icon_sprite.position.y = _rest_y - _hop_h
+
 	attract_timer -= delta
 	if is_instance_valid(magnetize_to) and attract_timer <= 0:
 		var dir: Vector2 = (magnetize_to.global_position - global_position)

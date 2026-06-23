@@ -10,10 +10,17 @@ const MAX_HEALTH := 150.0
 const MAX_HUNGER := 150.0
 const MAX_SANITY := 200.0
 
-const HUNGER_DRAIN_RATE := 1.5       # per minute
-const SANITY_NIGHT_DRAIN := 12.0     # per minute in darkness
-const SANITY_DAY_RESTORE := 6.0      # per minute in daylight
-const HUNGER_STARVE_DAMAGE := 5.0    # health per minute when starving
+# --- Tuning (Phase 3). Cycle is 8 min: ~5.84 min restore (day+dawn) vs ~2.16 min drain (dusk+night).
+const HUNGER_DRAIN_RATE := 5.0          # per minute — eating is now a real, recurring need
+const HUNGER_STARVE_DAMAGE := 5.0       # health per minute at 0 hunger
+const SANITY_DAY_RESTORE := 6.0         # per minute in daylight
+const SANITY_NIGHT_LIGHT_DRAIN := 3.0   # per minute at night NEAR light (fire/torch) — mostly safe
+const SANITY_NIGHT_DARK_DRAIN := 50.0   # per minute at night IN THE DARK — the core horror pressure
+const SANITY_HUNGER_DRAIN := 6.0        # per minute extra sanity loss while very hungry
+const HUNGER_STRESS_PCT := 0.30         # hunger below this fraction starts fraying sanity
+
+const SANITY_LOW_PCT := 0.5             # shadows + visual distortion begin (was 0.3)
+const SANITY_VERY_LOW_PCT := 0.25       # heavier horror: more/faster shadows (was 0.15)
 
 var health: float = MAX_HEALTH
 var hunger: float = MAX_HUNGER
@@ -45,11 +52,17 @@ func _tick_per_second() -> void:
 	if hunger <= 0.0:
 		take_damage(HUNGER_STARVE_DAMAGE / 60.0)
 
-	# Sanity changes based on time of day and light
+	# Sanity: recover by day; at night, light keeps you mostly safe but the dark devours you.
 	if is_day:
 		_change_sanity(SANITY_DAY_RESTORE / 60.0)
-	elif not in_light:
-		_change_sanity(-SANITY_NIGHT_DRAIN / 60.0)
+	elif in_light:
+		_change_sanity(-SANITY_NIGHT_LIGHT_DRAIN / 60.0)
+	else:
+		_change_sanity(-SANITY_NIGHT_DARK_DRAIN / 60.0)
+
+	# Hunger frays the nerves: being very hungry also bleeds sanity (couples the two pillars).
+	if hunger <= MAX_HUNGER * HUNGER_STRESS_PCT:
+		_change_sanity(-SANITY_HUNGER_DRAIN / 60.0)
 
 func take_damage(amount: float) -> void:
 	if invincible:
@@ -63,9 +76,11 @@ func heal(amount: float) -> void:
 	health = min(MAX_HEALTH, health + amount)
 	health_changed.emit(health, MAX_HEALTH)
 
+## Consume a food OR medicine item: applies its hunger/health/sanity restores. (Medicine like
+## bandages only set health_restore.)
 func eat(item_id: String) -> bool:
 	var item = ItemDatabase.get_item(item_id)
-	if not item or item.type != ItemDatabase.ItemType.FOOD:
+	if not item or (item.type != ItemDatabase.ItemType.FOOD and item.type != ItemDatabase.ItemType.MEDICINE):
 		return false
 	_change_hunger(item.hunger_restore)
 	heal(item.health_restore)
@@ -96,7 +111,12 @@ func get_sanity_pct() -> float:
 	return sanity / MAX_SANITY
 
 func is_low_sanity() -> bool:
-	return sanity < MAX_SANITY * 0.3
+	return get_sanity_pct() < SANITY_LOW_PCT
 
 func is_very_low_sanity() -> bool:
-	return sanity < MAX_SANITY * 0.15
+	return get_sanity_pct() < SANITY_VERY_LOW_PCT
+
+## 0.0 at the low-sanity threshold → 1.0 at empty. Drives the horror screen effects so they
+## scale with the threshold instead of a hardcoded literal.
+func get_insanity_intensity() -> float:
+	return clampf((SANITY_LOW_PCT - get_sanity_pct()) / SANITY_LOW_PCT, 0.0, 1.0)
