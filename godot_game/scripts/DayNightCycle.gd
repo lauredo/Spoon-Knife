@@ -6,7 +6,7 @@ signal time_updated(time_of_day: float)
 
 enum Phase { DAWN, DAY, DUSK, NIGHT }
 
-const CYCLE_DURATION := 480.0  # 8 minutes total
+const CYCLE_DURATION := 300.0  # 5 minutes total
 const DAY_START := 0.0
 const DUSK_START := 0.65     # 65% = start of dusk
 const NIGHT_START := 0.75    # 75% = night begins

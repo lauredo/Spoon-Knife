@@ -84,7 +84,7 @@ func _process(delta: float) -> void:
 	if light:
 		light.enabled = is_lit
 		if is_lit:
-			light.energy = 1.05 + sin(fire_phase) * 0.12  # gentle flicker
+			light.energy = 1.1  # static glow (no flicker)
 	queue_redraw()
 
 func _on_player_entered_light(body: Node) -> void:

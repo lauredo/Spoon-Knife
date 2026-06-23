@@ -55,7 +55,7 @@ func _build_ui() -> void:
 	panel.add_child(title)
 
 	var hint := Label.new()
-	hint.text = "clique: usar/equipar  |  direito: soltar  |  arraste: hotbar"
+	hint.text = "clique: usar/equipar  |  direito: soltar 1  |  arraste p/ fora: jogar tudo"
 	hint.position = Vector2(108, 17)
 	hint.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	hint.add_theme_font_size_override("font_size", 10)

@@ -53,20 +53,8 @@ func _ready() -> void:
 	col.shape = shape
 	add_child(col)
 
-	# Pickup area
-	var pickup_area := Area2D.new()
-	pickup_area.name = "PickupArea"
-	var pickup_col := CollisionShape2D.new()
-	var pickup_shape := CircleShape2D.new()
-	pickup_shape.radius = 40.0
-	pickup_col.shape = pickup_shape
-	pickup_area.add_child(pickup_col)
-	pickup_area.collision_layer = 0
-	pickup_area.collision_mask = 16  # dropped items layer
-	add_child(pickup_area)
-	pickup_area.body_entered.connect(_on_pickup_area_entered)
-
-	# Detection area for interactables
+	# Detection area for interactables: resources (8), dropped items (16) and structures (32).
+	# Dropped loot is picked up by pressing INTERACT (E) while near it — never auto-collected.
 	var interact_area := Area2D.new()
 	interact_area.name = "InteractArea"
 	var interact_col := CollisionShape2D.new()
@@ -75,7 +63,7 @@ func _ready() -> void:
 	interact_col.shape = interact_shape
 	interact_area.add_child(interact_col)
 	interact_area.collision_layer = 0
-	interact_area.collision_mask = 8 | 32  # resources + structures
+	interact_area.collision_mask = 8 | 16 | 32  # resources + dropped items + structures
 	add_child(interact_area)
 	interact_area.body_entered.connect(_on_interactable_entered)
 	interact_area.body_exited.connect(_on_interactable_exited)
@@ -148,6 +136,11 @@ func _update_sprite() -> void:
 	if sprite.animation != anim:
 		sprite.play(anim)
 	sprite.flip_h = facing.x < 0.0
+	# Tie the leg cadence to ground speed so the feet don't slide — most visible on the fast dodge.
+	if is_moving and not is_attacking:
+		sprite.speed_scale = clampf(velocity.length() / SPEED, 1.0, 2.8)
+	else:
+		sprite.speed_scale = 1.0
 	if hit_flash > 0.5:
 		sprite.modulate = Color(1.8, 1.8, 1.8)
 	elif is_dodging:
@@ -245,7 +238,9 @@ func _handle_movement(delta: float) -> void:
 		walk_cycle += delta * 8.0
 		is_moving = true
 	else:
-		velocity = velocity.move_toward(Vector2.ZERO, SPEED * 4.0 * delta)
+		# Stop firmly so a step doesn't glide on after you release the key (start is instant, so the
+		# stop should be too — a slow decel here was the "ice-skating" slide).
+		velocity = velocity.move_toward(Vector2.ZERO, SPEED * 16.0 * delta)
 		is_moving = false
 
 	move_and_slide()
@@ -327,10 +322,6 @@ func _try_interact() -> void:
 			closest = obj
 	if closest and closest.has_method("interact"):
 		closest.interact(self)
-
-func _on_pickup_area_entered(body: Node) -> void:
-	if body.has_method("pickup"):
-		body.pickup(self)
 
 func _on_interactable_entered(body: Node) -> void:
 	if not body in nearby_interactables:

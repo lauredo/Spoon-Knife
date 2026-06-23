@@ -16,6 +16,9 @@ var item_id: String = ""      # the item type currently shown here ("" = empty)
 
 static var _preview: CanvasLayer = null
 static var _preview_icon: TextureRect = null
+# Set true by whichever slot consumes a drop; the source slot reads it on DRAG_END to decide
+# whether the drag instead ended over the open world (→ drop the stack on the ground).
+static var _drop_consumed: bool = false
 var _dragging: bool = false
 
 func _ready() -> void:
@@ -24,6 +27,7 @@ func _ready() -> void:
 func _get_drag_data(_pos: Vector2):
 	if item_id == "" or inv == null:
 		return null
+	_drop_consumed = false
 	_spawn_preview()
 	_dragging = true
 	set_process(true)
@@ -33,6 +37,7 @@ func _can_drop_data(_pos: Vector2, data) -> bool:
 	return inv != null and data is Dictionary and data.has("item_id")
 
 func _drop_data(_pos: Vector2, data) -> void:
+	_drop_consumed = true  # a slot took it — the source slot must NOT also drop it on the ground
 	var id: String = data["item_id"]
 	if zone == "hotbar":
 		inv.move_to_hotbar_slot(id, slot_index)
@@ -46,9 +51,33 @@ func _process(_delta: float) -> void:
 func _notification(what: int) -> void:
 	# DRAG_END is broadcast to all controls — clean up the shared preview when any drag ends.
 	if what == NOTIFICATION_DRAG_END:
+		# Only the slot that started the drag acts; if no slot consumed the drop, the player let go
+		# over the world → toss the stack out onto the ground.
+		if _dragging and not _drop_consumed:
+			_try_drop_to_ground()
 		_dragging = false
 		set_process(false)
 		_kill_preview()
+
+## Released over the open world (no slot took the drop and no UI is under the cursor) → drop the
+## whole stack on the ground next to the player.
+func _try_drop_to_ground() -> void:
+	if item_id == "" or inv == null:
+		return
+	if get_viewport().gui_get_hovered_control() != null:
+		return  # released over a UI control, not the world → treat as a cancel
+	var p = GameManager.player
+	if p == null or not is_instance_valid(p):
+		return
+	# Capture the id NOW: remove_item() below emits inventory_changed, which the HUD handles by
+	# rewriting this very slot's `item_id` to the (now empty) hotbar entry. Reading item_id after
+	# that would drop an empty id → a blank, uncollectable blob on the ground.
+	var id := item_id
+	var amount: int = inv.get_count(id)
+	if amount <= 0:
+		return
+	if inv.remove_item(id, amount):
+		GameManager.spawn_drop(p.global_position, id, amount)
 
 func _exit_tree() -> void:
 	if _dragging:

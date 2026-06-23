@@ -5,6 +5,10 @@ extends MobBase
 ## relentlessly hunts, and VANISHES the moment sanity recovers. No art yet — a procedural shadow
 ## blob with glowing eyes (placeholder until the 2.5D painted pass).
 
+## Set by the boss for adds it calls down: these persist until killed instead of vanishing when
+## sanity recovers / day breaks (a regular shadow only haunts you while sanity is low at night).
+var summoned: bool = false
+
 func _init() -> void:
 	mob_name = "Shadow"
 	max_health = 30.0
@@ -30,11 +34,20 @@ func _base_modulate() -> Color:
 
 func _physics_process(delta: float) -> void:
 	# Only exist at night while the player's sanity is low — fade out at dawn or once they recover.
+	# Boss-summoned shadows ignore this and stay until killed.
 	var p = GameManager.player
-	if not is_dead and p and is_instance_valid(p) and p.stats and (p.stats.is_day or not p.stats.is_low_sanity()):
+	if not summoned and not is_dead and p and is_instance_valid(p) and p.stats and (p.stats.is_day or not p.stats.is_low_sanity()):
 		_vanish()
 		return
 	super._physics_process(delta)
+
+func take_damage(amount: float, attacker: Node = null) -> void:
+	# Striking a shadow is the ONLY way to claw sanity back (daylight no longer restores it).
+	if not is_dead and attacker is Player:
+		var pl := attacker as Player
+		if pl.stats:
+			pl.stats.restore_sanity(PlayerStats.SANITY_PER_SHADOW_HIT)
+	super.take_damage(amount, attacker)
 
 func _vanish() -> void:
 	if is_dead:

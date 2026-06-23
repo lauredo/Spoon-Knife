@@ -87,6 +87,12 @@ func pickup(player: Player) -> void:
 	if added > 0:
 		queue_free()
 
+## Picked up by pressing INTERACT (E) while near it — routed through the player's interactable
+## system, exactly like harvesting a grass tuft. Loot is never auto-collected; it waits on the
+## ground until you grab it.
+func interact(player: Player) -> void:
+	pickup(player)
+
 func attract(player: Node) -> void:
 	magnetize_to = player
 	attract_timer = 0.5  # Small delay before magnetizing

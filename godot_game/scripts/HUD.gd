@@ -122,7 +122,7 @@ func _build_ui() -> void:
 	# Controls hint (bottom-left)
 	var hint_label := Label.new()
 	hint_label.position = Vector2(10, 600)
-	hint_label.text = "WASD: Move  |  LClick: Attack  |  E: Interact  |  T: Craft  |  I: Bag  |  Space: Dodge  |  F: Cycle  |  =/-: Tempo"
+	hint_label.text = "WASD: Move  |  LClick: Attack  |  E: Interagir/Pegar  |  T: Craft  |  I: Bag  |  Space: Dodge  |  F: Cycle  |  =/-: Tempo"
 	hint_label.add_theme_font_size_override("font_size", 11)
 	hint_label.add_theme_color_override("font_color", Color(0.6, 0.6, 0.6, 0.8))
 	add_child(hint_label)

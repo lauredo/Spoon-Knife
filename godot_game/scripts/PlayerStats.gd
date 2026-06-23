@@ -10,13 +10,16 @@ const MAX_HEALTH := 150.0
 const MAX_HUNGER := 150.0
 const MAX_SANITY := 200.0
 
-# --- Tuning (Phase 3). Cycle is 8 min: ~5.84 min restore (day+dawn) vs ~2.16 min drain (dusk+night).
-const HUNGER_DRAIN_RATE := 5.0          # per minute — eating is now a real, recurring need
+# --- Tuning (Phase 3). Day cycle is 5 min. Hunger is a hard clock (full -> "worrying" within a
+# single day if you never eat). Sanity NEVER recovers passively any more: by day it holds steady,
+# at night it always bleeds (slow near fire/torch, fast in the dark), and the ONLY way back up is
+# striking shadow creatures (see ShadowMob.take_damage -> restore_sanity).
+const HUNGER_DRAIN_RATE := 18.0         # per minute — ~40% left by the end of day 1 if you don't eat
 const HUNGER_STARVE_DAMAGE := 5.0       # health per minute at 0 hunger
-const SANITY_DAY_RESTORE := 6.0         # per minute in daylight
-const SANITY_NIGHT_LIGHT_DRAIN := 3.0   # per minute at night NEAR light (fire/torch) — mostly safe
+const SANITY_NIGHT_LIGHT_DRAIN := 3.0   # per minute at night NEAR light (fire/torch) — slowed, not stopped
 const SANITY_NIGHT_DARK_DRAIN := 50.0   # per minute at night IN THE DARK — the core horror pressure
 const SANITY_HUNGER_DRAIN := 6.0        # per minute extra sanity loss while very hungry
+const SANITY_PER_SHADOW_HIT := 10.0     # sanity clawed back per hit landed on a shadow creature
 const HUNGER_STRESS_PCT := 0.30         # hunger below this fraction starts fraying sanity
 
 const SANITY_LOW_PCT := 0.5             # shadows + visual distortion begin (was 0.3)
@@ -52,13 +55,14 @@ func _tick_per_second() -> void:
 	if hunger <= 0.0:
 		take_damage(HUNGER_STARVE_DAMAGE / 60.0)
 
-	# Sanity: recover by day; at night, light keeps you mostly safe but the dark devours you.
-	if is_day:
-		_change_sanity(SANITY_DAY_RESTORE / 60.0)
-	elif in_light:
-		_change_sanity(-SANITY_NIGHT_LIGHT_DRAIN / 60.0)
-	else:
-		_change_sanity(-SANITY_NIGHT_DARK_DRAIN / 60.0)
+	# Sanity: no passive recovery any more. By day it holds steady; at night it always drains —
+	# slowly near fire/torch light, fast out in the dark. The only way back up is striking shadow
+	# creatures (ShadowMob.take_damage -> restore_sanity), which only emerge once sanity is low.
+	if not is_day:
+		if in_light:
+			_change_sanity(-SANITY_NIGHT_LIGHT_DRAIN / 60.0)
+		else:
+			_change_sanity(-SANITY_NIGHT_DARK_DRAIN / 60.0)
 
 	# Hunger frays the nerves: being very hungry also bleeds sanity (couples the two pillars).
 	if hunger <= MAX_HUNGER * HUNGER_STRESS_PCT:
@@ -75,6 +79,11 @@ func take_damage(amount: float) -> void:
 func heal(amount: float) -> void:
 	health = min(MAX_HEALTH, health + amount)
 	health_changed.emit(health, MAX_HEALTH)
+
+## Sanity gained by striking shadow creatures — the only recovery path now that daylight no longer
+## restores it. Called from ShadowMob.take_damage.
+func restore_sanity(amount: float) -> void:
+	_change_sanity(amount)
 
 ## Consume a food OR medicine item: applies its hunger/health/sanity restores. (Medicine like
 ## bandages only set health_restore.)
