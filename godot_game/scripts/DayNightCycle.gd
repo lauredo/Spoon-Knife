@@ -16,7 +16,7 @@ var time_of_day: float = 0.1  # 0..1 range
 var current_phase: Phase = Phase.DAY
 var day_number: int = 1
 var modulate_node: CanvasModulate = null
-var spider_nodes: Array = []
+var barata_nodes: Array = []
 
 func _ready() -> void:
 	pass
@@ -62,10 +62,10 @@ func _on_phase_change(phase: Phase) -> void:
 	var is_night := phase == Phase.NIGHT
 	if GameManager.player:
 		GameManager.player.stats.set_is_day(phase == Phase.DAY or phase == Phase.DAWN)
-	# Tell spiders about night mode
-	for spider in spider_nodes:
-		if is_instance_valid(spider) and spider.has_method("set_night_mode"):
-			spider.set_night_mode(is_night)
+	# Tell the roaches about night mode
+	for barata in barata_nodes:
+		if is_instance_valid(barata) and barata.has_method("set_night_mode"):
+			barata.set_night_mode(is_night)
 
 func _update_darkness() -> void:
 	if not modulate_node:
@@ -74,8 +74,12 @@ func _update_darkness() -> void:
 	# Multiply the whole world toward a dark blue at night; campfire/torch PointLight2Ds add
 	# brightness back around them. (CanvasModulate darkens the world canvas, not the HUD layer.)
 	var d: float = _get_darkness_level() / 0.88   # 0 (day) .. 1 (deep night)
+	# Accessibility slider: shave up to 50% off the darkness (0 keeps the designed look).
+	d *= 1.0 - 0.5 * Settings.night_brightness
 	# Deep night is near-black with a faint cold tint, so only campfire/torch pools are readable.
-	var col: Color = Color.WHITE.lerp(Color(0.02, 0.03, 0.07), d)
+	# A Blood Moon night bleeds the darkness red instead of blue.
+	var night_col := Color(0.12, 0.01, 0.02) if GameManager.blood_moon else Color(0.02, 0.03, 0.07)
+	var col: Color = Color.WHITE.lerp(night_col, d)
 
 	# Sanity distortion: tint the world toward a sickly purple as sanity drops.
 	if GameManager.player and GameManager.player.stats.is_low_sanity():
@@ -98,6 +102,28 @@ func _get_darkness_level() -> float:
 		var t := (time_of_day - DAWN_START) / (1.0 - DAWN_START)
 		return (1.0 - t) * 0.88
 
+# ── Moon & tide (S3) — the long clock. The moon phase sets the tide AMPLITUDE: full/new moon =
+# spring tides (extreme lows open the flooded waterfront ON FOOT), quarters = neap (it stays shut).
+# Day 2 is deliberately the FULL moon, so the Blood Moon night rides a spring tide.
+const LUNAR_PERIOD_DAYS := 8.0
+const TIDES_PER_DAY := 2.0
+
+## 0 = new moon, 0.5 = full, wrapping every LUNAR_PERIOD_DAYS.
+func moon_phase() -> float:
+	return fposmod((float(day_number) - 2.0) / LUNAR_PERIOD_DAYS + 0.5, 1.0)
+
+## Tide swing strength: 1 at full/new (spring), 0 at the quarters (neap).
+func moon_amplitude() -> float:
+	return absf(cos(TAU * moon_phase()))
+
+## Full moon tonight? (days 2, 10, 18... — phase steps 1/8 per day, so only exact days hit 0.5)
+func is_full_moon() -> bool:
+	return absf(moon_phase() - 0.5) < 0.07
+
+## -1 (lowest) .. +1 (highest): TIDES_PER_DAY sine cycles per day, scaled by the moon.
+func tide_level() -> float:
+	return sin(time_of_day * TAU * TIDES_PER_DAY) * moon_amplitude()
+
 func is_night() -> bool:
 	return current_phase == Phase.NIGHT
 
@@ -109,6 +135,6 @@ func get_time_string() -> String:
 func get_phase_name() -> String:
 	return _phase_name()
 
-func register_spider(spider: Node) -> void:
-	if not spider in spider_nodes:
-		spider_nodes.append(spider)
+func register_barata(barata: Node) -> void:
+	if not barata in barata_nodes:
+		barata_nodes.append(barata)

@@ -10,7 +10,7 @@ extends MobBase
 var summoned: bool = false
 
 func _init() -> void:
-	mob_name = "Shadow"
+	mob_name = "Sombra"
 	max_health = 30.0
 	move_speed = 115.0
 	attack_damage = 8.0
@@ -36,7 +36,9 @@ func _physics_process(delta: float) -> void:
 	# Only exist at night while the player's sanity is low — fade out at dawn or once they recover.
 	# Boss-summoned shadows ignore this and stay until killed.
 	var p = GameManager.player
-	if not summoned and not is_dead and p and is_instance_valid(p) and p.stats and (p.stats.is_day or not p.stats.is_low_sanity()):
+	# A Blood Moon keeps shadows around all night regardless of sanity; otherwise they fade the
+	# moment sanity recovers or day breaks. (Boss-summoned shadows always persist.)
+	if not summoned and not is_dead and not GameManager.blood_moon and p and is_instance_valid(p) and p.stats and (p.stats.is_day or not p.stats.is_low_sanity()):
 		_vanish()
 		return
 	super._physics_process(delta)
@@ -47,6 +49,8 @@ func take_damage(amount: float, attacker: Node = null) -> void:
 		var pl := attacker as Player
 		if pl.stats:
 			pl.stats.restore_sanity(PlayerStats.SANITY_PER_SHADOW_HIT)
+			# Make the ONLY sanity-recovery path visible (it was a black box before):
+			FloatText.spawn(get_parent(), global_position, "+%d sanidade" % int(PlayerStats.SANITY_PER_SHADOW_HIT), Color(0.55, 0.75, 1.0))
 	super.take_damage(amount, attacker)
 
 func _vanish() -> void:

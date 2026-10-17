@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64">
+  <g transform="rotate(45 32 32)">
+    <!-- barrel + taper + grip -->
+    <path d="M29.5 55 L29.5 40 C29 32 25.5 28 25.5 19 Q25.5 7 32 7 Q38.5 7 38.5 19 C38.5 28 35 32 34.5 40 L34.5 55 Z"
+          fill="#c89a5b" stroke="#7a5230" stroke-width="2" stroke-linejoin="round"/>
+    <!-- barrel highlight -->
+    <path d="M29 11 Q32 9.5 35 11 L35 24 Q32 26 29 24 Z" fill="#e0b97e" opacity="0.7"/>
+    <!-- grip tape -->
+    <rect x="28.5" y="42" width="7" height="9" rx="2" fill="#4a4a55"/>
+    <line x1="29" y1="45" x2="35" y2="44.5" stroke="#2e2e38" stroke-width="1"/>
+    <line x1="29" y1="48" x2="35" y2="47.5" stroke="#2e2e38" stroke-width="1"/>
+    <!-- knob -->
+    <ellipse cx="32" cy="55.5" rx="5" ry="3" fill="#8a5d36" stroke="#5c3d22" stroke-width="1.5"/>
+  </g>
+</svg>

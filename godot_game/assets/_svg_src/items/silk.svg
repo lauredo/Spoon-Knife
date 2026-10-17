@@ -1,1 +1,9 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64"><g stroke="#f2f2ff" stroke-width="4" fill="none" stroke-linecap="round"><path d="M20 12 q6 20 0 40"/><path d="M32 12 q-6 20 0 40"/><path d="M44 12 q6 20 0 40"/></g></svg>
+<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64">
+  <!-- Carapaça: curved chitin shell shard from the giant roaches -->
+  <path d="M14 40 Q12 18 32 10 Q52 18 50 40 Q44 54 32 56 Q20 54 14 40 Z"
+        fill="#5c3317" stroke="#3a2010" stroke-width="3" stroke-linejoin="round"/>
+  <path d="M32 12 L32 54" stroke="#3a2010" stroke-width="2.5"/>
+  <path d="M18 38 Q17 22 30 14 L30 50 Q22 48 18 38 Z" fill="#6f4020" opacity="0.85"/>
+  <path d="M22 20 Q26 16 30 15" stroke="#8a5a30" stroke-width="2.5" fill="none" stroke-linecap="round"/>
+  <path d="M46 38 Q47 26 40 18" stroke="#4a2810" stroke-width="2" fill="none" stroke-linecap="round"/>
+</svg>

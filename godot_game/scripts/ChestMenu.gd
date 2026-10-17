@@ -188,7 +188,8 @@ func _make_slot(item_id: String, count: int, is_chest: bool) -> Panel:
 	var slot := Panel.new()
 	slot.size = Vector2(SLOT, SLOT)
 	slot.clip_contents = true
-	slot.tooltip_text = item_data.display_name if item_data else item_id
+	var move_hint := "Esquerdo: pegar tudo · Direito: pegar 1" if is_chest else "Esquerdo: guardar tudo · Direito: guardar 1"
+	slot.tooltip_text = ItemDatabase.tooltip(item_id) + "\n" + move_hint
 
 	var slot_style := StyleBoxFlat.new()
 	slot_style.bg_color = Color(0.12, 0.12, 0.12, 0.9)

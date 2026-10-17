@@ -1,4 +1,4 @@
-# Survival Craft — Contexto do Projeto (handoff entre sessões)
+# Guaxinim — Noites de Muriqui (ex-Survival Craft) — Contexto do Projeto (handoff entre sessões)
 
 Top-down survival game (estilo Don't Starve) em **Godot 4.7**, GDScript. Projeto em
 `godot_game/`. Este doc resume o estado atual, como rodar/validar, a arquitetura e o
@@ -33,7 +33,7 @@ pipeline de arte, pra continuar em outra sessão.
 ## Arquitetura
 - **Autoloads** (`project.godot [autoload]`, em ordem): `Assets`, `ItemDatabase`, `CraftingSystem`, `GameManager`.
 - **Cena principal** `scenes/Main.tscn` (`Main.gd`): `Background` (z -10), `World` (Node2D, **y_sort**), com filhos `Resources/Mobs/Structures/DroppedItems` (todos **y_sort**), `DarknessOverlay` (z 50), `HUDLayer`, `CraftingMenu` (CanvasLayers). O **Player é criado por código** em `Main._spawn_player()` e adicionado ao `World` (sem z_index, pra ser Y-sorted). Não aparece no editor parado — só em Play.
-- **Entidades** (`scripts/`): `Player`, `MobBase`+`BoarMob`+`SpiderMob`, `ResourceNode` (TREE/ROCK/BUSH/GRASS_TUFT), `Campfire`, `DropItem`, `HUD`, `CraftingMenu`, `WorldGenerator`. Cenas (`scenes/`) são só root+script; filhos (colisão, áreas, sprites) são criados em `_ready()`.
+- **Entidades** (`scripts/`): `Player`, `MobBase`+`BoarMob`+`BarataMob`, `ResourceNode` (TREE/ROCK/BUSH/GRASS_TUFT), `Campfire`, `DropItem`, `HUD`, `CraftingMenu`, `WorldGenerator`. Cenas (`scenes/`) são só root+script; filhos (colisão, áreas, sprites) são criados em `_ready()`.
 - **Camadas de física 2D** (`project.godot [layer_names]`): 1=World, 2=Player, 3=Mobs, 4=Resources, 5=DroppedItems, 6=Structures. (bitmask: World=1, Player=2, Mobs=4, Resources=8, Drops=16, Structures=32).
   - Player `collision_mask = 1|4|32`; Mobs `1|2|4|32`.
   - **ResourceNode**: layer 8 (interação). Árvore/pedra TAMBÉM na layer 1 (`8|1=9`) → bloqueiam player/mobs. Arbusto/grama só layer 8 → atravessáveis. Hitbox da árvore = **cápsula vertical do tronco** (base na base do tronco); pedra = círculo.
@@ -44,7 +44,7 @@ Visuais são **sprites carregados de arquivos**, com **fallback procedural** aut
 - **Build (SVG→PNG)**: `& "<console exe>" --headless --path godot_game -s res://tools/build_assets.gd` → rasteriza todo `_svg_src/**.svg` para `assets/sprites/**.png` a 4×.
 - **Ícones de item**: `tools/gen_item_icons.gd` gera 1 SVG por item (a partir das cores do `ItemDatabase`); pula os que já existem (não sobrescreve edições).
 - **Loader**: autoload `Assets` (`scripts/autoload/Assets.gd`): `item_icon(id)`, `sprite(cat,name)`, `sprite_frames(name, specs)`. Retorna null se faltar (→ fallback). Cache interno.
-- **Animados** (player, boar, spider, chama da fogueira): `SpriteFrames` montado em runtime a partir de PNGs `assets/sprites/<name>/<anim>_<i>.png` (sem `.tres`). `flip_h` por direção; flash de dano via `modulate`. Barras de vida/arco de ataque/luz continuam procedurais por cima.
+- **Animados** (player, boar, barata, chama da fogueira): `SpriteFrames` montado em runtime a partir de PNGs `assets/sprites/<name>/<anim>_<i>.png` (sem `.tres`). `flip_h` por direção; flash de dano via `modulate`. Barras de vida/arco de ataque/luz continuam procedurais por cima.
 - **Atualizar arte**: edita o SVG (ou troca o PNG direto) e roda `build_assets.gd`. Sem código.
 - `*.import` é **gitignored** (Godot reimporta ao abrir); os `.png`/`.svg` são versionados.
 

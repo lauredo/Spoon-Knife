@@ -1,6 +1,11 @@
-# Survival Craft - Don't Die
+# Guaxinim — Noites de Muriqui
 
-Um jogo de sobrevivência e crafting inspirado em Don't Starve Together, criado em **Godot 4**.
+Sobrevivência sem fim como um **guaxinim** em Vila Muriqui, uma cidade litorânea onde as luzes
+estão se apagando. Saqueie casas, evite os humanos de dia, aguente as noites (e a lua de sangue),
+negocie com o corvo da colônia, construa uma balsa e chegue às ilhas. Criado em **Godot 4**.
+
+> Documentos de design: `GDD.md` (mestre) e `MUNDO.md` (visão do mundo). Este README cobre o
+> básico de como rodar e os controles; alguns detalhes de sistemas abaixo podem estar defasados.
 
 ## Como Jogar
 
@@ -22,9 +27,12 @@ Um jogo de sobrevivência e crafting inspirado em Don't Starve Together, criado 
 | `Click Esquerdo` | Atacar / Coletar recurso |
 | `E` | Interagir com objetos próximos |
 | `Space` | Rolar / Dodge (invencível durante o dodge) |
-| `T` | Abrir/fechar menu de Crafting |
+| `T` | Abrir/fechar menu de Criação |
+| `I` | Abrir/fechar a mochila |
+| `M` | Abrir/fechar o mapa |
 | `F` | Ciclar item equipado na hotbar |
 | `1-6` | Selecionar slot da hotbar |
+| `F1` | Menu de debug |
 | `R` | Reiniciar (após morrer) |
 | `Esc` | Sair |
 
@@ -39,7 +47,7 @@ Um jogo de sobrevivência e crafting inspirado em Don't Starve Together, criado 
 
 ### Ciclo Dia/Noite
 - Dia dura ~5 minutos, noite ~1 min e meio.
-- À noite a escuridão aumenta e as aranhas ficam mais agressivas.
+- À noite a escuridão aumenta e as baratas ficam mais agressivas.
 - Construa uma fogueira para afastar a escuridão e manter a sanidade.
 
 ### Recursos
@@ -47,7 +55,7 @@ Um jogo de sobrevivência e crafting inspirado em Don't Starve Together, criado 
 |---------|-----------|-------|
 | Árvore | Machado | Madeira, Galho, Sementes |
 | Rocha | Picareta | Pedra, Sílex |
-| Arbusto | Mãos | Frutas, Galho |
+| Arbusto | Mãos | Frutinhas, Galho |
 | Grama | Mãos | Grama, Sementes |
 
 ### Crafting (tecla T)
@@ -60,11 +68,12 @@ Um jogo de sobrevivência e crafting inspirado em Don't Starve Together, criado 
 | Lança | 2 Galho + 1 Sílex + 1 Corda |
 | Fogueira | 2 Madeira + 2 Grama + 2 Galho |
 | Baú | 6 Madeira + 2 Corda |
-| Ham Bat | 1 Carne + 2 Galho + 1 Corda |
+| Taco de Beisebol | 3 Madeira + 2 Pano + 1 Corda |
 
 ### Mobs
-- **Aranha**: Agressiva de longe. À noite fica mais rápida e agressiva. Dropa seda, glândula, carne monstro.
+- **Barata Gigante**: Agressiva de longe. À noite fica mais rápida e agressiva. Dropa carapaça, gosma e carne estranha.
 - **Javali**: Passivo até ser atacado. Muito resistente e forte. Dropa carne e sementes.
+- E mais: ratos, cães de rua, veados, humanos (furtividade), sombras, chefes Alfa e Jacaré.
 
 ### Combate
 - Ataque com **clique esquerdo** — hit em arco na direção do personagem.
@@ -87,7 +96,7 @@ godot_game/
 ├── scenes/
 │   ├── Main.tscn              # Cena principal
 │   ├── mobs/
-│   │   ├── Spider.tscn
+│   │   ├── Barata.tscn
 │   │   └── Boar.tscn
 │   ├── resources/
 │   │   ├── Tree.tscn
@@ -107,7 +116,7 @@ godot_game/
     ├── PlayerStats.gd         # Vida, fome, sanidade
     ├── Inventory.gd           # Inventário e hotbar
     ├── MobBase.gd             # Classe base dos inimigos (máquina de estados)
-    ├── SpiderMob.gd           # Aranha (agressiva)
+    ├── BarataMob.gd           # Barata gigante (agressiva)
     ├── BoarMob.gd             # Javali (passivo/territorial)
     ├── ResourceNode.gd        # Árvores, rochas, arbustos
     ├── DropItem.gd            # Item dropado no chão

@@ -13,8 +13,10 @@ func _process(delta: float) -> void:
 	var p = GameManager.player
 	if p == null or not is_instance_valid(p) or p.stats == null:
 		return
-	# Shadows are a NIGHT terror: they only emerge in the dark hours (dusk/night), never in daylight.
-	if GameManager.is_game_over or p.stats.is_day or not p.stats.is_low_sanity():
+	# Shadows are a NIGHT terror: they only emerge in the dark hours, never in daylight. Normally
+	# gated by LOW sanity — but a Blood Moon summons them regardless of how sane you are.
+	var bm: bool = GameManager.blood_moon
+	if GameManager.is_game_over or p.stats.is_day or (not bm and not p.stats.is_low_sanity()):
 		_timer = 0.0
 		return
 
@@ -23,8 +25,11 @@ func _process(delta: float) -> void:
 		return
 
 	var very: bool = p.stats.is_very_low_sanity()
-	var cap: int = 5 if very else 3
-	_timer = 2.0 if very else 4.0
+	# Blood moons ESCALATE with each lunar cycle survived (wave 0 on day 2, +1 every 8 days):
+	# more shadows, faster — the endless game's difficulty curve rides the moon.
+	var wave: int = maxi(0, (GameManager.current_day - 2) / 8) if bm else 0
+	var cap: int = mini(7 + wave * 2, 15) if bm else (5 if very else 3)
+	_timer = maxf(0.6, 1.2 - 0.15 * wave) if bm else (2.0 if very else 4.0)
 	if _count_shadows() >= cap:
 		return
 	_spawn_shadow(p)

@@ -1,10 +1,15 @@
-[gd_scene load_steps=6 format=3]
+[gd_scene load_steps=11 format=3]
 
 [ext_resource type="Script" path="res://scripts/Main.gd" id="1"]
 [ext_resource type="Script" path="res://scripts/HUD.gd" id="2"]
 [ext_resource type="Script" path="res://scripts/CraftingMenu.gd" id="3"]
 [ext_resource type="Script" path="res://scripts/BackpackMenu.gd" id="4"]
 [ext_resource type="Script" path="res://scripts/ChestMenu.gd" id="5"]
+[ext_resource type="Script" path="res://scripts/PauseMenu.gd" id="6"]
+[ext_resource type="Script" path="res://scripts/TradeMenu.gd" id="7"]
+[ext_resource type="Script" path="res://scripts/MapMenu.gd" id="8"]
+[ext_resource type="Script" path="res://scripts/DebugMenu.gd" id="9"]
+[ext_resource type="Script" path="res://scripts/QuestMenu.gd" id="10"]
 
 [node name="Main" type="Node2D"]
 script = ExtResource("1")
@@ -47,3 +52,23 @@ script = ExtResource("4")
 [node name="ChestMenu" type="CanvasLayer" parent="."]
 layer = 12
 script = ExtResource("5")
+
+[node name="TradeMenu" type="CanvasLayer" parent="."]
+layer = 12
+script = ExtResource("7")
+
+[node name="MapMenu" type="CanvasLayer" parent="."]
+layer = 13
+script = ExtResource("8")
+
+[node name="QuestMenu" type="CanvasLayer" parent="."]
+layer = 12
+script = ExtResource("10")
+
+[node name="PauseMenu" type="CanvasLayer" parent="."]
+layer = 20
+script = ExtResource("6")
+
+[node name="DebugMenu" type="CanvasLayer" parent="."]
+layer = 21
+script = ExtResource("9")

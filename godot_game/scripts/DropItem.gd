@@ -85,6 +85,7 @@ func _process(delta: float) -> void:
 func pickup(player: Player) -> void:
 	var added := player.inventory.add_item(item_id, amount)
 	if added > 0:
+		Audio.play_sfx("pickup")
 		queue_free()
 
 ## Picked up by pressing INTERACT (E) while near it — routed through the player's interactable

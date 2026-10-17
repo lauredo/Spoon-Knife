@@ -8,7 +8,7 @@ on:
 
 env:
   GODOT_VERSION: 4.7
-  EXPORT_NAME: SurvivalCraft
+  EXPORT_NAME: Guaxinim
 
 jobs:
   # ── Web (HTML5) Export ──────────────────────────────────────────────────────

@@ -8,7 +8,7 @@ var charge_timer: float = 0.0
 var tusk_wobble: float = 0.0
 
 func _ready() -> void:
-	mob_name = "Boar"
+	mob_name = "Javali"
 	max_health = 250.0
 	move_speed = 70.0
 	attack_damage = 30.0
@@ -49,6 +49,14 @@ func _start_charge() -> void:
 	if is_instance_valid(self) and not is_dead:
 		move_speed = prev_speed
 		is_charging = false
+		recover_timer = 0.6  # winded after the sprint — the burst is escapable, not a permanent glue
+
+## After landing a tusk hit the boar is briefly winded (recover_timer freezes pursuit in MobBase).
+## Without this it kept pressing into the player at matching speed right after striking, so you
+## could never break away.
+func _perform_attack() -> void:
+	super._perform_attack()
+	recover_timer = 0.9
 
 func _physics_process(delta: float) -> void:
 	tusk_wobble = sin(Time.get_ticks_msec() * 0.005) * 3.0

@@ -13,6 +13,19 @@ var scroll: ScrollContainer
 const PANEL_W := 320
 const PANEL_H := 480
 
+# Recipe categories are internal ids; this is what the player reads.
+const CATEGORY_NAMES := {
+	"tools": "Ferramentas",
+	"light": "Iluminação",
+	"refine": "Refino",
+	"healing": "Cura",
+	"weapons": "Armas",
+	"structures": "Estruturas",
+	"food": "Comida",
+	"armor": "Armaduras",
+	"survival": "Sobrevivência",
+}
+
 func _ready() -> void:
 	_build_ui()
 	hide_menu()
@@ -37,7 +50,7 @@ func _build_ui() -> void:
 	add_child(panel)
 
 	title_label = Label.new()
-	title_label.text = "Crafting"
+	title_label.text = "Criação"
 	title_label.position = Vector2(12, 10)
 	title_label.add_theme_font_size_override("font_size", 18)
 	title_label.add_theme_color_override("font_color", Color(0.95, 0.85, 0.55))
@@ -106,7 +119,7 @@ func _refresh_recipes() -> void:
 	for category in categories:
 		# Category header
 		var cat_label := Label.new()
-		cat_label.text = category.capitalize()
+		cat_label.text = CATEGORY_NAMES.get(category, category.capitalize())
 		cat_label.add_theme_font_size_override("font_size", 13)
 		cat_label.add_theme_color_override("font_color", Color(0.75, 0.65, 0.4))
 		recipe_list.add_child(cat_label)
@@ -163,7 +176,9 @@ func _add_recipe_row(recipe, near_structures: Array) -> void:
 		ingredients_text += "%s %d/%d  " % [ing_name, have, required]
 
 	if recipe.requires_structure != "":
-		ingredients_text += "[needs %s]" % recipe.requires_structure
+		var st_data = ItemDatabase.get_item(recipe.requires_structure)
+		var st_name: String = st_data.display_name if st_data else recipe.requires_structure
+		ingredients_text += "[precisa de %s]" % st_name
 
 	var ing_label := Label.new()
 	ing_label.text = ingredients_text
@@ -173,7 +188,7 @@ func _add_recipe_row(recipe, near_structures: Array) -> void:
 
 	# Craft button
 	var craft_btn := Button.new()
-	craft_btn.text = "Craft"
+	craft_btn.text = "Criar"
 	craft_btn.disabled = not can_craft
 	craft_btn.custom_minimum_size = Vector2(55, 36)
 	craft_btn.pressed.connect(_on_craft_pressed.bind(recipe))
@@ -194,14 +209,8 @@ func _on_craft_pressed(recipe) -> void:
 
 	var new_inventory := CraftingSystem.apply_craft(recipe, player.inventory.items)
 	player.inventory.apply_crafting_result(new_inventory)
+	Audio.play_sfx("craft")
 
-	# If it's a structure, place it near the player
-	var result_data = ItemDatabase.get_item(recipe.result_item)
-	if result_data and result_data.type == ItemDatabase.ItemType.STRUCTURE:
-		if player.inventory.has_item(recipe.result_item):
-			# Remove from inventory and place in world
-			player.inventory.remove_item(recipe.result_item, 1)
-			var place_pos := player.global_position + player.facing * 80.0
-			GameManager.world.get_node("WorldGenerator").place_structure(recipe.result_item, place_pos, player)
-
+	# Structures are NOT auto-placed any more — they go to the inventory as an item. Select one on
+	# the hotbar to enter placement mode (a grid ghost) and left-click to set it down. See Player.
 	_refresh_recipes()

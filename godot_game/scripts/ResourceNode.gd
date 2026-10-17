@@ -13,9 +13,15 @@ var required_tool: String = ""  # "" = any, "axe", "pickaxe"
 var drops: Array = []
 var regrow_time: float = 120.0
 var is_depleted: bool = false
+var save_id: int = -1  # stable id (deterministic gen order) — SaveSystem persists depletion by it
 var regrow_timer: float = 0.0
 var shake_amount: float = 0.0
 var bob_phase: float = 0.0
+
+## Bushes carry berries you can pick with E (without destroying the bush); they grow back.
+const BERRY_REGROW := 90.0
+var has_berries: bool = true
+var berry_timer: float = 0.0
 
 var sprite: Sprite2D = null
 var _collision: CollisionShape2D = null  # disabled while depleted so you can walk over the stump
@@ -148,9 +154,21 @@ func _process(delta: float) -> void:
 		regrow_timer -= delta
 		if regrow_timer <= 0.0:
 			_regrow()
-	queue_redraw()
+	elif resource_type == ResourceType.BUSH and not has_berries:
+		berry_timer -= delta
+		if berry_timer <= 0.0:
+			has_berries = true
+			_update_bush_look()
+			queue_redraw()
+	# Redraw only while something visible is animating (hit shake, damaged health bar, or the
+	# procedural fallback's bob). With ~1700 nodes in the big world, an unconditional per-frame
+	# redraw on every node adds up; sprite-based, untouched nodes now skip it entirely.
+	# (_deplete/_regrow/_take_hit queue their own one-shot redraws on state change.)
+	if shake_amount > 0.0 or sprite == null or (not is_depleted and health < max_health):
+		queue_redraw()
 
-func interact(player: Player) -> void:
+## ATTACK path (the swing): damages the node and destroys it when health runs out.
+func chop(player: Player) -> void:
 	if is_depleted:
 		return
 
@@ -167,14 +185,51 @@ func interact(player: Player) -> void:
 	var damage := 34.0
 	if item_data and item_data.damage > 0:
 		damage = float(item_data.damage)
+	if GameManager.has_perk("bracos_de_lenhador"):
+		damage *= 1.2  # perk (S6): seasoned gathering arms
 	_take_hit(damage, player)
 	if item_data and item_data.durability > 0:
 		player.inventory.use_durability(equipped_id, 1)
 
-## Harvest from a tool/weapon swing (the attack button). Trees/rocks/bushes are chopped this
-## way now; the tool check & damage live in interact(), so this just forwards to it.
-func chop(player: Player) -> void:
-	interact(player)
+## INTERACT path (E): the gentle harvest. Grass is plucked whole; a bush gives up its BERRIES but
+## survives (they grow back) — breaking the bush with the attack button is the destructive
+## alternative that also yields the twigs. Trees/rocks ignore E (swing at them).
+func interact(player: Player) -> void:
+	if is_depleted:
+		return
+	match resource_type:
+		ResourceType.GRASS_TUFT:
+			chop(player)  # plucking a tuft by hand IS harvesting it
+		ResourceType.BUSH:
+			_pick_berries(player)
+		_:
+			pass
+
+## Pick the berries off a bush without killing it. They regrow after BERRY_REGROW.
+func _pick_berries(player: Player) -> void:
+	if not has_berries:
+		return
+	has_berries = false
+	berry_timer = BERRY_REGROW
+	var amount := randi_range(1, 3)
+	if GameManager.is_raining():
+		amount += 1  # same rain bonus as breaking the bush
+	player.inventory.add_item("berries", amount)
+	Audio.play_sfx("pickup")
+	_update_bush_look()
+	queue_redraw()
+
+## A picked bush reads duller (the berries are baked into the sprite, so tint it).
+func _update_bush_look() -> void:
+	if sprite and resource_type == ResourceType.BUSH:
+		sprite.modulate = Color.WHITE if has_berries else Color(0.62, 0.78, 0.6)
+
+## Smashed by a mob (the boss bulldozes anything in its path): heavy damage, no player/tool
+## involved. Drops still spawn via _harvest, so a boss rampage leaves loot behind.
+func smash(damage: float) -> void:
+	if is_depleted:
+		return
+	_take_hit(damage, null)
 
 func _take_hit(damage: float, player: Player) -> void:
 	health -= damage
@@ -249,6 +304,12 @@ func _flash_silhouette() -> void:
 func _harvest(player: Player) -> void:
 	for drop_info in drops:
 		var amount: int = randi_range(drop_info.get("min", 1), drop_info.get("max", 1))
+		# A bush that's already been picked has no berries left to spill.
+		if resource_type == ResourceType.BUSH and str(drop_info.get("item", "")) == "berries":
+			if not has_berries:
+				continue
+			if GameManager.is_raining():
+				amount += 1  # rain nourishes the glade
 		if amount > 0:
 			GameManager.spawn_drop(global_position + Vector2(randf_range(-30, 30), randf_range(-30, 30)),
 								   drop_info["item"], amount)
@@ -257,6 +318,7 @@ func _harvest(player: Player) -> void:
 func _deplete() -> void:
 	is_depleted = true
 	regrow_timer = regrow_time
+	GameManager.on_resource_harvested()  # perk milestone (S6)
 	if sprite:
 		sprite.visible = false
 	# Drop the hitbox so the leftover stump/rubble can be walked over.
@@ -268,6 +330,8 @@ func _deplete() -> void:
 func _regrow() -> void:
 	is_depleted = false
 	health = max_health
+	has_berries = true
+	_update_bush_look()
 	if sprite:
 		sprite.visible = true
 	if _collision:

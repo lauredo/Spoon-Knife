@@ -1,4 +1,4 @@
-# MVP — "3 Noites" (nome provisório)
+# MVP — "3 Noites" (DOC HISTÓRICO — superado pelo GDD.md; o jogo hoje é "Guaxinim — Noites de Muriqui")
 
 > Guaxinim faz coisas de gente pra sobreviver na natureza. Conforme **fome** e **sanidade**
 > despencam, o mundo fofo dá lugar a **monstros de terror**. Sobreviva **3 dias** e derrote o

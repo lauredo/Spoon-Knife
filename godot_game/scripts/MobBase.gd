@@ -28,6 +28,7 @@ var state_timer: float = 0.0
 var attack_timer: float = 0.0
 var hit_flash: float = 0.0
 var wander_timer: float = 0.0
+var recover_timer: float = 0.0  # >0 = winded (post-attack/charge): stands still, giving an escape window
 var is_dead: bool = false
 
 var sprite: AnimatedSprite2D = null
@@ -65,7 +66,7 @@ func _ready() -> void:
 func _sprite_name() -> String:
 	return ""
 
-# Subclasses can override for a persistent tint (e.g. spider night mode).
+# Subclasses can override for a persistent tint (e.g. barata night mode).
 func _base_modulate() -> Color:
 	return Color.WHITE
 
@@ -113,6 +114,7 @@ func _update_timers(delta: float) -> void:
 	attack_timer -= delta
 	hit_flash = max(0.0, hit_flash - delta * 3.0)
 	wander_timer -= delta
+	recover_timer -= delta
 
 func _update_state(delta: float) -> void:
 	match state:
@@ -159,6 +161,13 @@ func _update_state(delta: float) -> void:
 				state = State.IDLE
 
 func _process_movement(delta: float) -> void:
+	# Winded: no pursuit for a beat. Without this a mob that just landed a hit kept pressing into
+	# the player at full speed — at matching speeds you could never break away (the boar bug).
+	if recover_timer > 0.0:
+		velocity = velocity.move_toward(Vector2.ZERO, move_speed * 6.0 * delta)
+		move_and_slide()
+		return
+
 	var move_dir := Vector2.ZERO
 
 	match state:
@@ -229,7 +238,7 @@ func take_damage(amount: float, attacker: Node = null) -> void:
 		_die()
 
 ## Hit feedback: a solid-white silhouette of the current sprite frame pops out and fades —
-## same effect as struck resources. Sprite-based mobs (boar/spider) only; procedural mobs
+## same effect as struck resources. Sprite-based mobs (boar/barata) only; procedural mobs
 ## (shadow/boss placeholders) keep their white `hit_flash` tint from `_draw_mob`.
 func _flash_silhouette() -> void:
 	if sprite == null or sprite.sprite_frames == null:
@@ -263,6 +272,8 @@ func _die() -> void:
 	if sprite:
 		sprite.visible = false
 	_spawn_drops()
+	if not (self is ColonyRaccoon):  # butchering the colony is not "hunting" (see reputation)
+		GameManager.on_mob_killed()
 	died.emit(self)
 	await get_tree().create_timer(0.3).timeout
 	queue_free()

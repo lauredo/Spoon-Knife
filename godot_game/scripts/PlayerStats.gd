@@ -4,11 +4,40 @@ extends Node
 signal health_changed(current: float, maximum: float)
 signal hunger_changed(current: float, maximum: float)
 signal sanity_changed(current: float, maximum: float)
+signal energy_changed(current: float, maximum: float)
+signal temperature_changed(current: float, maximum: float)
 signal died
 
 const MAX_HEALTH := 150.0
 const MAX_HUNGER := 150.0
 const MAX_SANITY := 200.0
+const MAX_ENERGY := 100.0
+
+# --- Energia (S5, user-locked design): drains awake (passive + heavy actions), refills ONLY by
+# sleeping in a bed (time runs 4x — the night is lived, not skipped). At 0 the raccoon is
+# exhausted: -30% move speed + slower swings (Player reads is_exhausted). Food restores a nibble.
+const ENERGY_DRAIN_RATE := 12.0     # per minute awake → ~60/day-cycle passive
+const ENERGY_SLEEP_REGEN := 110.0   # per minute asleep → a full night's sleep ≈ full bar
+const ENERGY_ATTACK_COST := 0.5
+const ENERGY_DODGE_COST := 1.5
+
+# --- Temperatura (S5, rides the weather): the bar DRIFTS toward a context target (day/night,
+# rain, roof overhead, fire nearby, open water). Below the freeze line = Frio: health bleeds
+# until you find fire or shelter. Fifth and LAST visible bar (GDD caps them at 5).
+const MAX_TEMP := 100.0
+const TEMP_FREEZE_PCT := 0.25
+const TEMP_RATE := 25.0             # per minute toward the target
+const TEMP_RATE_FIRE := 50.0        # a fire warms you back fast (QoL — recovery isn't a chore)
+const TEMP_RATE_SWIM := 60.0        # open water strips heat
+const COLD_HEALTH_DRAIN := 5.0      # per minute while Frio
+
+# --- Condições (S5): discrete states, ONE system — icons, not a 6th bar. Rare events with a
+# clear item answer: bandage stops bleeding, salve also clears sickness.
+const BLEED_DURATION := 90.0
+const BLEED_HEALTH_DRAIN := 10.0    # per minute while Sangrando
+const SICK_DURATION := 120.0
+const SICK_ENERGY_EXTRA := 12.0     # per minute extra energy drain while Enjoado
+const SICK_HUNGER_EXTRA := 6.0      # per minute extra hunger drain while Enjoado
 
 # --- Tuning (Phase 3). Day cycle is 5 min. Hunger is a hard clock (full -> "worrying" within a
 # single day if you never eat). Sanity NEVER recovers passively any more: by day it holds steady,
@@ -28,10 +57,17 @@ const SANITY_VERY_LOW_PCT := 0.25       # heavier horror: more/faster shadows (w
 var health: float = MAX_HEALTH
 var hunger: float = MAX_HUNGER
 var sanity: float = MAX_SANITY
+var energy: float = MAX_ENERGY
+var temperature: float = 70.0
+var bleeding_timer: float = 0.0
+var sick_timer: float = 0.0
 
 var in_light: bool = true
 var is_day: bool = true
 var invincible: bool = false
+var is_sleeping: bool = false  # set by Player.start_sleeping/wake_up
+var swimming: bool = false     # mirrored from Player.is_swimming each frame
+var indoors: bool = false      # set by Player.set_indoors (Building roof trigger)
 
 var _time_accumulator: float = 0.0
 
@@ -39,6 +75,7 @@ func _ready() -> void:
 	health = MAX_HEALTH
 	hunger = MAX_HUNGER
 	sanity = MAX_SANITY
+	energy = MAX_ENERGY
 
 func _process(delta: float) -> void:
 	_time_accumulator += delta
@@ -48,6 +85,8 @@ func _process(delta: float) -> void:
 		_tick_per_second()
 
 func _tick_per_second() -> void:
+	if GameManager.debug_god:
+		return  # debug: no survival drain
 	# Hunger drains constantly
 	_change_hunger(-HUNGER_DRAIN_RATE / 60.0)
 
@@ -62,11 +101,58 @@ func _tick_per_second() -> void:
 		if in_light:
 			_change_sanity(-SANITY_NIGHT_LIGHT_DRAIN / 60.0)
 		else:
-			_change_sanity(-SANITY_NIGHT_DARK_DRAIN / 60.0)
+			var dark_drain := SANITY_NIGHT_DARK_DRAIN
+			if GameManager.has_perk("veterano_da_noite"):
+				dark_drain *= 0.75  # perk (S6): the dark is familiar now
+			_change_sanity(-dark_drain / 60.0)
 
 	# Hunger frays the nerves: being very hungry also bleeds sanity (couples the two pillars).
 	if hunger <= MAX_HUNGER * HUNGER_STRESS_PCT:
 		_change_sanity(-SANITY_HUNGER_DRAIN / 60.0)
+
+	# Energia: refills asleep, drains awake (heavy actions cost extra via spend_energy).
+	if is_sleeping:
+		_change_energy(ENERGY_SLEEP_REGEN / 60.0)
+	else:
+		var e_drain := ENERGY_DRAIN_RATE
+		if GameManager.has_perk("sono_leve"):
+			e_drain *= 0.85  # perk (S6): rests deeper, tires slower
+		_change_energy(-e_drain / 60.0)
+
+	# Temperatura: drift toward the context target; freezing bleeds health.
+	var t_target := _temp_target()
+	var t_rate := TEMP_RATE
+	if swimming:
+		t_rate = TEMP_RATE_SWIM
+	elif in_light and t_target > temperature:
+		t_rate = TEMP_RATE_FIRE
+	temperature = move_toward(temperature, t_target, t_rate / 60.0)
+	temperature_changed.emit(temperature, MAX_TEMP)
+	if is_cold():
+		take_damage(COLD_HEALTH_DRAIN / 60.0)
+
+	# Condições: rare, timed, each with a clear item answer (see eat()).
+	if bleeding_timer > 0.0:
+		bleeding_timer = maxf(0.0, bleeding_timer - 1.0)
+		take_damage(BLEED_HEALTH_DRAIN / 60.0)
+	if sick_timer > 0.0:
+		sick_timer = maxf(0.0, sick_timer - 1.0)
+		_change_energy(-SICK_ENERGY_EXTRA / 60.0)
+		_change_hunger(-SICK_HUNGER_EXTRA / 60.0)
+
+## Where the temperature wants to settle given the situation. Night + rain in the open dips
+## below the freeze line; a roof cancels the rain; fire dominates everything but open water.
+func _temp_target() -> float:
+	if swimming:
+		return 12.0
+	var t := 70.0 if is_day else 45.0
+	if indoors:
+		t += 12.0
+	elif GameManager.is_raining():
+		t -= 28.0
+	if in_light:
+		t = maxf(t, 92.0)
+	return clampf(t, 0.0, MAX_TEMP)
 
 func take_damage(amount: float) -> void:
 	if invincible:
@@ -85,6 +171,11 @@ func heal(amount: float) -> void:
 func restore_sanity(amount: float) -> void:
 	_change_sanity(amount)
 
+## Sanity bled by an external terror source (the boss's dread aura). Kept separate from
+## restore_sanity so callers read as what they do.
+func drain_sanity(amount: float) -> void:
+	_change_sanity(-amount)
+
 ## Consume a food OR medicine item: applies its hunger/health/sanity restores. (Medicine like
 ## bandages only set health_restore.)
 func eat(item_id: String) -> bool:
@@ -94,7 +185,44 @@ func eat(item_id: String) -> bool:
 	_change_hunger(item.hunger_restore)
 	heal(item.health_restore)
 	_change_sanity(item.sanity_restore)
+	if item.hunger_restore > 0.0:
+		_change_energy(item.hunger_restore * 0.2)  # a meal perks you up a little
+	# Condições: dressings stop the bleed; the premium salve clears the gut too; bad food gambles.
+	if item.type == ItemDatabase.ItemType.MEDICINE:
+		bleeding_timer = 0.0
+		if item_id == "salve":
+			sick_timer = 0.0
+	elif item_id == "monster_meat" and randf() < 0.35:
+		apply_sickness()
+	elif item_id == "old_pizza" and randf() < 0.2:
+		apply_sickness()
 	return true
+
+func apply_bleeding() -> void:
+	bleeding_timer = BLEED_DURATION
+
+func apply_sickness() -> void:
+	sick_timer = SICK_DURATION
+
+func is_bleeding() -> bool:
+	return bleeding_timer > 0.0
+
+func is_sick() -> bool:
+	return sick_timer > 0.0
+
+func is_cold() -> bool:
+	return temperature < MAX_TEMP * TEMP_FREEZE_PCT
+
+## Heavy actions (swing, dodge) burn extra energy — called from Player.
+func spend_energy(amount: float) -> void:
+	_change_energy(-amount)
+
+func is_exhausted() -> bool:
+	return energy <= 0.001
+
+func _change_energy(amount: float) -> void:
+	energy = clamp(energy + amount, 0.0, MAX_ENERGY)
+	energy_changed.emit(energy, MAX_ENERGY)
 
 func _change_hunger(amount: float) -> void:
 	hunger = clamp(hunger + amount, 0.0, MAX_HUNGER)

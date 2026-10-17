@@ -4,6 +4,7 @@ extends Node
 signal inventory_changed
 signal item_equipped(item_id: String)
 signal durability_changed(item_id: String, current: int, maximum: int)
+signal armor_changed(item_id: String)
 
 const HOTBAR_SIZE := 6
 
@@ -11,6 +12,7 @@ var items: Dictionary = {}
 var equipped_slot: int = 0
 var hotbar: Array = []
 var item_durabilities: Dictionary = {}
+var equipped_armor: String = ""  # worn armor (separate from the held hotbar item); "" = none
 
 func _ready() -> void:
 	hotbar.resize(HOTBAR_SIZE)
@@ -123,6 +125,62 @@ func _remove_from_hotbar(item_id: String) -> void:
 			hotbar[i] = ""
 			if equipped_slot == i:
 				equipped_slot = 0
+
+## Wear a piece of armor: moves one from the inventory into the dedicated armor slot (preserving
+## its current durability), returning any previously-worn armor to the inventory. Returns false
+## if the item isn't owned armor.
+func equip_armor(item_id: String) -> bool:
+	var item_data = ItemDatabase.get_item(item_id)
+	if item_data == null or item_data.type != ItemDatabase.ItemType.ARMOR:
+		return false
+	if not has_item(item_id):
+		return false
+	if item_id == equipped_armor:
+		# Same piece: durability is tracked PER ID (max_stack 1), so "swapping" would silently
+		# destroy one copy and hand the wear of the old one to the new (confirmed bug). No-op.
+		return false
+	if equipped_armor != "":
+		unequip_armor()  # take the current one off first (back to inventory)
+	var dur: int = get_durability(item_id)
+	remove_item(item_id, 1)
+	equipped_armor = item_id
+	if item_data.durability > 0:
+		item_durabilities[item_id] = dur if dur > 0 else item_data.durability
+	armor_changed.emit(equipped_armor)
+	return true
+
+## Take off the worn armor — it returns to the inventory, keeping its remaining durability.
+func unequip_armor() -> void:
+	if equipped_armor == "":
+		return
+	var id: String = equipped_armor
+	equipped_armor = ""
+	if add_item(id, 1) == 0:
+		# Stack had no room (another copy in the bag): drop it at the player's feet instead of
+		# letting it silently vanish.
+		if GameManager.player and is_instance_valid(GameManager.player):
+			GameManager.spawn_drop(GameManager.player.global_position, id, 1)
+	armor_changed.emit("")
+
+## Wear down the worn armor by `amount` (called when it absorbs a hit). Breaks — and unequips —
+## when it hits zero.
+func use_armor_durability(amount: int = 1) -> void:
+	if equipped_armor == "":
+		return
+	var item_data = ItemDatabase.get_item(equipped_armor)
+	if item_data == null or item_data.durability < 0:
+		return
+	var current: int = item_durabilities.get(equipped_armor, item_data.durability)
+	current -= amount
+	if current <= 0:
+		var broken: String = equipped_armor
+		item_durabilities.erase(broken)
+		equipped_armor = ""
+		durability_changed.emit(broken, 0, item_data.durability)
+		armor_changed.emit("")
+	else:
+		item_durabilities[equipped_armor] = current
+		durability_changed.emit(equipped_armor, current, item_data.durability)
 
 func set_item_durability(item_id: String, durability: int) -> void:
 	var item_data = ItemDatabase.get_item(item_id)

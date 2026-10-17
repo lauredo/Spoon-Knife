@@ -76,7 +76,8 @@ func get_structure_type() -> String:
 func _process(delta: float) -> void:
 	fire_phase += delta * 8.0
 	if is_lit:
-		fuel_timer -= delta
+		# Rain eats the fuel twice as fast — keeping a fire lit in a storm is a real cost.
+		fuel_timer -= delta * (2.0 if GameManager.is_raining() else 1.0)
 		if fuel_timer <= 0.0:
 			_extinguish()
 	if flame:
@@ -90,27 +91,44 @@ func _process(delta: float) -> void:
 func _on_player_entered_light(body: Node) -> void:
 	if body is Player:
 		nearby_players.append(body)
-		body.set_near_light(true)
+		if is_lit:  # an unlit fire pit grants no light credit (near_light is refcounted now)
+			body.set_near_light(true)
 
 func _on_player_exited_light(body: Node) -> void:
 	if body is Player:
 		nearby_players.erase(body)
-		body.set_near_light(false)
+		if is_lit:
+			body.set_near_light(false)
 
 func interact(player: Player) -> void:
-	# Allow adding fuel
+	# Refuel. Charcoal is a premium, long-burning fuel (3x wood); wood is the everyday one. Prefer
+	# wood (common) and fall back to charcoal, so a charcoal stockpile becomes a long unattended
+	# burn instead of being spent on a fire that still has plenty of wood. Charcoal is crafted from
+	# wood AT a lit campfire, so converting wood -> charcoal triples its fuel value.
 	if player.inventory.has_item("wood"):
 		player.inventory.remove_item("wood", 1)
-		fuel_timer += 180.0
-		if not is_lit:
-			is_lit = true
+		_add_fuel(180.0, "Lenha")
+	elif player.inventory.has_item("charcoal"):
+		player.inventory.remove_item("charcoal", 1)
+		_add_fuel(540.0, "Carvão")
+
+func _add_fuel(seconds: float, fuel_name: String) -> void:
+	fuel_timer += seconds
+	if not is_lit:
+		is_lit = true
+		for p in nearby_players:  # relighting restores the credit of whoever is standing here
+			if is_instance_valid(p):
+				p.set_near_light(true)
+	if GameManager.hud and GameManager.hud.has_method("show_notification"):
+		GameManager.hud.show_notification("Fogueira reabastecida (%s)" % fuel_name)
 
 func _extinguish() -> void:
 	is_lit = false
 	for p in nearby_players:
 		if is_instance_valid(p):
 			p.set_near_light(false)
-	nearby_players.clear()
+	# Keep nearby_players: they're still physically inside the area — the exit handler (or a
+	# relight) rebalances their credit. Clearing + unconditional exit used to double-decrement.
 	fire_extinguished.emit()
 
 func _draw() -> void:
@@ -156,4 +174,4 @@ func _draw() -> void:
 			draw_circle(Vector2(cos(angle) * 7, sin(angle) * 5), 2.5, Color(0.5, 0.22, 0.05, 0.6))
 		# "Relight" hint
 		var font := ThemeDB.fallback_font
-		draw_string(font, Vector2(-30, 44), "[E] Add wood", HORIZONTAL_ALIGNMENT_LEFT, -1, 11, Color(0.8, 0.7, 0.5, 0.8))
+		draw_string(font, Vector2(-34, 44), "[E] Lenha / Carvão", HORIZONTAL_ALIGNMENT_LEFT, -1, 11, Color(0.8, 0.7, 0.5, 0.8))
